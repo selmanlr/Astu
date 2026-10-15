@@ -1,6 +1,8 @@
-import csv
+ import csv
 import os
 import re
+from threading import Thread
+from flask import Flask
 from telegram import (
     Update, InlineKeyboardButton, InlineKeyboardMarkup,
     ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
@@ -10,6 +12,22 @@ from telegram.ext import (
     ConversationHandler, filters, ContextTypes
 )
 
+# ================= FLASK KEEP-ALIVE FOR RENDER =================
+app_web = Flask(__name__)
+
+@app_web.route('/')
+def home():
+    return "🚀 ASTU Bot is Alive and Running 24/7!"
+
+def run_web():
+    port = int(os.environ.get("PORT", 10000))
+    app_web.run(host='0.0.0.0', port=port)
+
+def keep_alive():
+    t = Thread(target=run_web)
+    t.daemon = True
+    t.start()
+
 # ================= CONFIGURATION =================
 TOKEN = "8687801959:AAHf9hw-gpgkIqxseUE3aA2o4jGeaTYOTGo"
 ADMIN_ID = 8891900780
@@ -17,7 +35,6 @@ CHANNEL_URL = "https://t.me/astutechteam"
 ADMIN_USERNAME = "@Selman_Ali"
 DB_FILE = "astu_club_members.csv"
 
-# States
 LANG, NAME, ASTU_ID, PHONE, YEAR, CLUB, MOTIVATION = range(7)
 
 # ================= MULTI-LANGUAGE DICTIONARY =================
@@ -97,7 +114,6 @@ CLUBS = [
     "🎨 Media & Digital Arts Club"
 ]
 
-# Initialize CSV Database
 if not os.path.exists(DB_FILE):
     with open(DB_FILE, mode='w', newline='', encoding='utf-8') as f:
         writer = csv.writer(f)
@@ -150,7 +166,6 @@ async def get_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     astu_id = update.message.text.strip().upper()
     lang = context.user_data.get('lang', 'en')
 
-    # Regex validation for UGR/xxxxx/xx or PGR/xxxxx/xx
     if not re.match(r"^(UGR|PGR|BSC)/\d{4,6}/\d{2}$", astu_id):
         await update.message.reply_text(TEXTS[lang]['invalid_id'], parse_mode="Markdown")
         return ASTU_ID
@@ -175,8 +190,6 @@ async def get_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return PHONE
 
     context.user_data['phone'] = phone
-    
-    # Remove reply keyboard and show inline year options
     msg = await update.message.reply_text("🔄...", reply_markup=ReplyKeyboardRemove())
     await msg.delete()
 
@@ -211,19 +224,16 @@ async def get_motivation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     data = context.user_data
 
-    # Save to CSV
     with open(DB_FILE, mode='a', newline='', encoding='utf-8') as f:
         writer = csv.writer(f)
         writer.writerow([user.id, f"@{user.username}", data['name'], data['astu_id'], data['phone'], data['year'], data['club'], data['motivation']])
 
-    # Send confirmation to student
     keyboard = [
         [InlineKeyboardButton(TEXTS[lang]['channel_btn'], url=CHANNEL_URL)],
         [InlineKeyboardButton(TEXTS[lang]['help_btn'], url=f"https://t.me/{ADMIN_USERNAME.replace('@', '')}")]
     ]
     await update.message.reply_text(TEXTS[lang]['success'], reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
 
-    # Send Rich Notification to Admin (Selman)
     admin_msg = (
         f"🔔 **NEW ASTU CLUB REGISTRATION!** 🔔\n\n"
         f"👤 **Name:** {data['name']}\n"
@@ -310,7 +320,8 @@ def main():
     app.add_handler(CallbackQueryHandler(admin_callbacks, pattern='^adm_'))
 
     print("🚀 ASTU Bot is running...")
-    app.run_polling()
+    app.run_polling(drop_pending_updates=True)
 
 if __name__ == '__main__':
+    keep_alive()
     main()
