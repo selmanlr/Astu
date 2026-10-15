@@ -37,6 +37,57 @@ DB_FILE = "astu_club_members.csv"
 
 LANG, NAME, ASTU_ID, PHONE, YEAR, CLUB, MOTIVATION = range(7)
 
+# ================= DATABASE HELPERS =================
+def init_db():
+    if not os.path.exists(DB_FILE):
+        with open(DB_FILE, mode='w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            writer.writerow(["User_ID", "Username", "Full_Name", "ASTU_ID", "Phone", "Year", "Club", "Motivation", "Status"])
+
+def get_user_by_tg_id(user_id):
+    if not os.path.exists(DB_FILE):
+        return None
+    with open(DB_FILE, mode='r', encoding='utf-8') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            if row["User_ID"] == str(user_id):
+                return row
+    return None
+
+def get_user_by_astu_id(astu_id):
+    if not os.path.exists(DB_FILE):
+        return None
+    with open(DB_FILE, mode='r', encoding='utf-8') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            if row["ASTU_ID"].upper() == astu_id.upper():
+                return row
+    return None
+
+def update_or_delete_user(user_id, action="approve"):
+    if not os.path.exists(DB_FILE):
+        return
+    rows = []
+    fieldnames = ["User_ID", "Username", "Full_Name", "ASTU_ID", "Phone", "Year", "Club", "Motivation", "Status"]
+    with open(DB_FILE, mode='r', encoding='utf-8') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            if row["User_ID"] == str(user_id):
+                if action == "approve":
+                    row["Status"] = "Approved"
+                    rows.append(row)
+                elif action == "reject":
+                    # Reject ሲደረግ ወደ rows አይጨመርም (ከመዝገብ ይወጣል!)
+                    continue
+            else:
+                rows.append(row)
+    with open(DB_FILE, mode='w', newline='', encoding='utf-8') as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+init_db()
+
 # ================= MULTI-LANGUAGE DICTIONARY =================
 TEXTS = {
     'en': {
@@ -47,6 +98,7 @@ TEXTS = {
         'ask_name': "👤 Please enter your **Full Name**:",
         'ask_id': "🆔 Enter your **ASTU ID** (Format: `UGR/43400/19`):",
         'invalid_id': "❌ **Invalid ID Format!**\nPlease use the proper ASTU format (e.g., `UGR/43400/19`).",
+        'id_taken': "⚠️ **ID Already Registered!**\nThis ID (`{id}`) belongs to **{name}**. Please enter your own valid ASTU ID:",
         'ask_phone': "📱 Share your **Phone Number** using the button below, or type it (`09...` or `07...`):",
         'share_phone': "📲 Share My Phone Number",
         'invalid_phone': "❌ Invalid phone number! Please enter a valid Ethiopian number.",
@@ -63,6 +115,7 @@ TEXTS = {
         'ask_name': "👤 እባክዎ **ሙሉ ስምዎን** ያስገቡ፦",
         'ask_id': "🆔 የ**ASTU መታወቂያ ቁጥርዎን** ያስገቡ (ለምሳሌ፦ `UGR/43400/19`)፦",
         'invalid_id': "❌ **የተሳሳተ ID አጻጻፍ!**\nእባክዎ ትክክለኛውን የASTU ፎርማት ይጠቀሙ (ምሳሌ፦ `UGR/43400/19`)።",
+        'id_taken': "⚠️ **ይህ መታወቂያ ቁጥር ተይዟል!**\nይህ ID (`{id}`) ቀድሞ በ **{name}** ስም ተመዝግቧል። እባክዎ የራስዎን ትክክለኛ ID ያስገቡ፦",
         'ask_phone': "📱 ከታች ያለውን በተን በመጫን ወይም በመጻፍ **ስልክ ቁጥርዎን** ያስገቡ፦",
         'share_phone': "📲 ስልክ ቁጥሬን ላክ",
         'invalid_phone': "❌ የተሳሳተ ስልክ ቁጥር! እባክዎ ትክክለኛ ቁጥር ያስገቡ።",
@@ -79,6 +132,7 @@ TEXTS = {
         'ask_name': "👤 Maaloo **Maqaa Guutuu** keessan galchaa:",
         'ask_id': "🆔 **Waraqaa Eenyummaa ASTU (ID)** galchaa (Fkn: `UGR/43400/19`):",
         'invalid_id': "❌ **ID Dogoggoraa!**\nMaaloo haala sirriin barreessaa (Fkn: `UGR/43400/19`).",
+        'id_taken': "⚠️ **ID kun duraan galmaa'eera!**\nID kun (`{id}`) maqaa **{name}** jedhuun qabameera. Maaloo ID keessan galchaa:",
         'ask_phone': "📱 **Lakkoofsa Bilbilaa** keessan qoodaa ykn barreessaa:",
         'share_phone': "📲 Lakkoofsa Bilbilaa Ergi",
         'invalid_phone': "❌ Lakkoofsi bilbilaa sirrii miti!",
@@ -95,6 +149,7 @@ TEXTS = {
         'ask_name': "👤 ብኽብረትኩም **ምሉእ ሽምኩም** የእትዉ፦",
         'ask_id': "🆔 ናይ **ASTU መንነት ቁጽሪ (ID)** የእትዉ (ንኣብነት፦ `UGR/43400/19`)፦",
         'invalid_id': "❌ **ጌጋ ኣጸሓሕፋ ID!**\nብኽብረትኩም ብትኽክል ጸሓፉ (ንኣብነት፦ `UGR/43400/19`)።",
+        'id_taken': "⚠️ **እዚ መንነት ቁጽሪ ተታሒዙ እዩ!**\nእዚ ID (`{id}`) ኣቐዲሙ ብ **{name}** ተመዝጊቡ ኣሎ። ብኽብረትኩም ናይ ባዕልኹም ID የእትዉ፦",
         'ask_phone': "📱 **ቁጽሪ ስልክኹም** ኣብ ታሕቲ ዘሎ መጠወቒ ብምጥዋቕ ወይ ብምጽሓፍ ስደዱ፦",
         'share_phone': "📲 ቁጽሪ ስልከይ ስደድ",
         'invalid_phone': "❌ ጌጋ ቁጽሪ ስልኪ!",
@@ -114,13 +169,28 @@ CLUBS = [
     "🎨 Media & Digital Arts Club"
 ]
 
-if not os.path.exists(DB_FILE):
-    with open(DB_FILE, mode='w', newline='', encoding='utf-8') as f:
-        writer = csv.writer(f)
-        writer.writerow(["User_ID", "Username", "Full_Name", "ASTU_ID", "Phone", "Year", "Club", "Motivation"])
-
 # ================= HANDLERS =================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    existing = get_user_by_tg_id(user.id)
+
+    # 1. ተማሪው ቀድሞ ከተመዘገበ ድጋሚ እንዳይመዘገብ መከልከል
+    if existing:
+        kb = [
+            [InlineKeyboardButton("📢 Join ASTU Tech Channel", url=CHANNEL_URL)],
+            [InlineKeyboardButton("💬 Contact Admin", url=f"https://t.me/{ADMIN_USERNAME.replace('@', '')}")]
+        ]
+        msg = (
+            f"👋 **ሰላም {existing['Full_Name']}! ቀድሞውኑ ተመዝግበዋል!**\n"
+            f"*(You have already registered!)*\n\n"
+            f"🆔 **ID:** `{existing['ASTU_ID']}`\n"
+            f"🎯 **Club:** {existing['Club']}\n"
+            f"📊 **Status:** `{existing['Status']}`\n\n"
+            f"ምንም አይነት ጥያቄ ወይም ማስተካከያ ካለዎት አድሚኑን ({ADMIN_USERNAME}) ያነጋግሩ።"
+        )
+        await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
+        return ConversationHandler.END
+
     keyboard = [
         [InlineKeyboardButton("🇬🇧 English", callback_data='lang_en'),
          InlineKeyboardButton("🇪🇹 አማርኛ", callback_data='lang_am')],
@@ -152,6 +222,12 @@ async def select_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def start_registration(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
+    
+    # Double check if already registered
+    if get_user_by_tg_id(update.effective_user.id):
+        await query.edit_message_text("✅ ቀድሞውኑ ተመዝግበዋል! /start የሚለውን ይጫኑ።")
+        return ConversationHandler.END
+
     lang = context.user_data.get('lang', 'en')
     await query.edit_message_text(TEXTS[lang]['ask_name'], parse_mode="Markdown")
     return NAME
@@ -168,6 +244,13 @@ async def get_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not re.match(r"^(UGR|PGR|BSC)/\d{4,6}/\d{2}$", astu_id):
         await update.message.reply_text(TEXTS[lang]['invalid_id'], parse_mode="Markdown")
+        return ASTU_ID
+
+    # 2. ይህ ID በሌላ ተማሪ ተይዞ እንደሆነ ማረጋገጥና ስሙን መጥቀስ
+    taken_user = get_user_by_astu_id(astu_id)
+    if taken_user:
+        err_msg = TEXTS[lang]['id_taken'].format(id=astu_id, name=taken_user['Full_Name'])
+        await update.message.reply_text(err_msg, parse_mode="Markdown")
         return ASTU_ID
 
     context.user_data['astu_id'] = astu_id
@@ -224,9 +307,10 @@ async def get_motivation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     data = context.user_data
 
+    # Save with "Pending" status
     with open(DB_FILE, mode='a', newline='', encoding='utf-8') as f:
         writer = csv.writer(f)
-        writer.writerow([user.id, f"@{user.username}", data['name'], data['astu_id'], data['phone'], data['year'], data['club'], data['motivation']])
+        writer.writerow([user.id, f"@{user.username}", data['name'], data['astu_id'], data['phone'], data['year'], data['club'], data['motivation'], "Pending"])
 
     keyboard = [
         [InlineKeyboardButton(TEXTS[lang]['channel_btn'], url=CHANNEL_URL)],
@@ -246,7 +330,7 @@ async def get_motivation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     admin_kb = [[
         InlineKeyboardButton("✅ Approve", callback_data=f"adm_app_{user.id}"),
-        InlineKeyboardButton("❌ Reject", callback_data=f"adm_rej_{user.id}")
+        InlineKeyboardButton("❌ Reject (Remove)", callback_data=f"adm_rej_{user.id}")
     ]]
     await context.bot.send_message(chat_id=ADMIN_ID, text=admin_msg, reply_markup=InlineKeyboardMarkup(admin_kb), parse_mode="Markdown")
     return ConversationHandler.END
@@ -256,12 +340,26 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return
     
-    with open(DB_FILE, 'r', encoding='utf-8') as f:
-        total = sum(1 for row in f) - 1
+    total = 0
+    approved = 0
+    pending = 0
+    if os.path.exists(DB_FILE):
+        with open(DB_FILE, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                total += 1
+                if row.get("Status") == "Approved":
+                    approved += 1
+                else:
+                    pending += 1
 
     kb = [[InlineKeyboardButton("📥 Download Excel/CSV Data", callback_data="adm_export")]]
     await update.message.reply_text(
-        f"👑 **Welcome Admin Selman!**\n\n📊 **Total Registered Students:** `{total}`\n\nUse the button below to export all student data.",
+        f"👑 **Welcome Admin Selman!**\n\n"
+        f"📊 **Total Active Members:** `{total}`\n"
+        f"✅ **Approved:** `{approved}`\n"
+        f"⏳ **Pending Review:** `{pending}`\n\n"
+        f"*(Rejected students are automatically removed from the list)*",
         reply_markup=InlineKeyboardMarkup(kb),
         parse_mode="Markdown"
     )
@@ -272,24 +370,33 @@ async def admin_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
 
     if data == "adm_export":
-        await context.bot.send_document(chat_id=ADMIN_ID, document=open(DB_FILE, 'rb'), filename="ASTU_Club_Members.csv", caption="📊 Here is the updated registration list!")
+        await context.bot.send_document(chat_id=ADMIN_ID, document=open(DB_FILE, 'rb'), filename="ASTU_Club_Members.csv", caption="📊 Here is the clean registration list!")
     
     elif data.startswith("adm_app_"):
         student_id = int(data.split("_")[2])
-        await context.bot.send_message(
-            chat_id=student_id,
-            text=f"🎉 **Congratulations!**\nYour ASTU Club application has been **APPROVED** by the Admin! Welcome aboard! 🚀\n\nJoin our channel for updates: {CHANNEL_URL}",
-            parse_mode="Markdown"
-        )
+        update_or_delete_user(student_id, action="approve")
+        try:
+            await context.bot.send_message(
+                chat_id=student_id,
+                text=f"🎉 **Congratulations!**\nYour ASTU Club application has been **APPROVED** by Admin {ADMIN_USERNAME}! Welcome aboard! 🚀\n\nJoin our channel for updates: {CHANNEL_URL}",
+                parse_mode="Markdown"
+            )
+        except Exception:
+            pass
         await query.edit_message_text(query.message.text + "\n\n✅ **STATUS: APPROVED BY SELMAN**", parse_mode="Markdown")
 
     elif data.startswith("adm_rej_"):
         student_id = int(data.split("_")[2])
-        await context.bot.send_message(
-            chat_id=student_id,
-            text=f"ℹ️ Thank you for applying to ASTU Clubs. Unfortunately, we couldn't approve your application at this time. Contact {ADMIN_USERNAME} if you have questions."
-        )
-        await query.edit_message_text(query.message.text + "\n\n❌ **STATUS: REJECTED**", parse_mode="Markdown")
+        # 3. Reject ሲደረግ ከCSV ዳታቤዝ ውስጥ ሙሉ በሙሉ ይሰረዛል!
+        update_or_delete_user(student_id, action="reject")
+        try:
+            await context.bot.send_message(
+                chat_id=student_id,
+                text=f"❌ **Application Update**\nThank you for applying to ASTU Clubs. Unfortunately, your application was **rejected** and removed from our database.\n\nIf you made a mistake, you can send /start to register again, or contact {ADMIN_USERNAME}."
+            )
+        except Exception:
+            pass
+        await query.edit_message_text(query.message.text + "\n\n🗑️ **STATUS: REJECTED & REMOVED FROM DB**", parse_mode="Markdown")
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Registration cancelled. Type /start to begin again.", reply_markup=ReplyKeyboardRemove())
