@@ -16,7 +16,7 @@ from telegram.ext import (
     ConversationHandler, InlineQueryHandler, filters, ContextTypes
 )
 
-# ================= CONFIGURATION =================
+# ================= መሰረታዊ መረጃዎች (CONFIGURATION) =================
 TOKEN = "8687801959:AAHf9hw-gpgkIqxseUE3aA2o4jGeaTYOTGo"
 ADMIN_ID = 8891900780
 CHANNEL_URL = "https://t.me/astutechteam"
@@ -25,7 +25,7 @@ DB_NAME = "astu_portal.db"
 
 LANG, NAME, ASTU_ID, PHONE, CLUB, SKILL, CONFIRM, BROADCAST_MSG = range(8)
 
-# ================= LIVE WEB ADMIN PORTAL (FLASK) =================
+# ================= የዌብሳይት መቆጣጠሪያ (FLASK WEB PORTAL) =================
 app_web = Flask(__name__)
 
 @app_web.route('/')
@@ -45,7 +45,8 @@ def home():
     return f"""
     <html>
     <head>
-        <title>ASTU Clubs Live Database</title>
+        <meta charset="utf-8">
+        <title>የASTU ክለቦች ዳታቤዝ</title>
         <style>
             body {{ font-family: system-ui, sans-serif; background: #0f172a; color: #f8fafc; padding: 30px; }}
             table {{ width: 100%; border-collapse: collapse; margin-top: 20px; background: #1e293b; border-radius: 8px; overflow: hidden; }}
@@ -55,10 +56,10 @@ def home():
         </style>
     </head>
     <body>
-        <h2>🏛 ASTU Clubs Live Registry ({len(rows)} Members)</h2>
+        <h2>🏛 የASTU ክለቦች የተመዝጋቢዎች ዝርዝር ({len(rows)} ተማሪዎች)</h2>
         <table>
-            <tr><th>Full Name</th><th>ASTU ID</th><th>Year</th><th>Club</th><th>Status</th></tr>
-            {trs or '<tr><td colspan="5">No members registered yet.</td></tr>'}
+            <tr><th>ሙሉ ስም</th><th>መታወቂያ (ID)</th><th>ዓመት</th><th>ክለብ</th><th>ሁኔታ (Status)</th></tr>
+            {trs or '<tr><td colspan="5">እስካሁን የተመዘገበ ተማሪ የለም።</td></tr>'}
         </table>
     </body>
     </html>
@@ -68,7 +69,7 @@ def keep_alive():
     port = int(os.environ.get("PORT", 10000))
     Thread(target=lambda: app_web.run(host='0.0.0.0', port=port), daemon=True).start()
 
-# ================= DATABASE ENGINE =================
+# ================= የዳታቤዝ ሲስተም (SQLITE3) =================
 def init_db():
     with sqlite3.connect(DB_NAME) as conn:
         conn.execute('''CREATE TABLE IF NOT EXISTS members (
@@ -97,58 +98,39 @@ def check_id_owner(astu_id):
         return dict(row) if row else None
 
 def save_member(d):
-    now = datetime.now().strftime("%b %d, %Y %H:%M")
+    now = datetime.now().strftime("%Y-%m-%d %H:%M")
     with sqlite3.connect(DB_NAME) as conn:
         conn.execute('''INSERT OR REPLACE INTO members VALUES (?,?,?,?,?,?,?,?,?,?)''',
-            (d['user_id'], d['username'], d['name'], d['astu_id'], d['phone'], d['year'], d['club'], d['skill'], "Pending ⏳", now))
+            (d['user_id'], d['username'], d['name'], d['astu_id'], d['phone'], d['year'], d['club'], d['skill'], "በانتظار (Pending) ⏳", now))
 
 def update_db_status(user_id, action):
     with sqlite3.connect(DB_NAME) as conn:
         if action == "approve":
-            conn.execute("UPDATE members SET status='Approved ✅' WHERE user_id=?", (user_id,))
+            conn.execute("UPDATE members SET status='ጸድቋል (Approved) ✅' WHERE user_id=?", (user_id,))
         elif action == "reject":
             conn.execute("DELETE FROM members WHERE user_id=?", (user_id,))
 
-# Smart Auto-Batch Calculator from ASTU ID
+# ከID ላይ የትምህርት ዓመትን በራስ-ሰር የሚያውቅ ፈንክሽን
 def detect_batch_from_id(astu_id: str) -> str:
     batch_num = int(astu_id.split('/')[-1])
     mapping = {
-        19: "1st Year (Freshman)",
-        18: "2nd Year (Sophomore)",
-        17: "3rd Year",
-        16: "4th Year",
-        15: "5th Year (GC)"
+        19: "1ኛ ዓመት (Freshman)",
+        18: "2ኛ ዓመት",
+        17: "3ኛ ዓመት",
+        16: "4ኛ ዓመት",
+        15: "5ኛ ዓመት (GC)"
     }
-    return mapping.get(batch_num, f"Batch of '{batch_num}")
+    return mapping.get(batch_num, f"የ {batch_num} ባች")
 
-# Dynamic Digital ID Card Image URL Generator (No external libs needed)
+# የQR Code መታወቂያ ካርድ መስሪያ
 def generate_id_card_url(name, astu_id, club, year):
-    qr_data = urllib.parse.quote(f"ASTU VERIFIED MEMBER\nName: {name}\nID: {astu_id}\nClub: {club}\nBatch: {year}\nVerified by: {ADMIN_USERNAME}")
+    qr_data = urllib.parse.quote(f"ASTU VERIFIED MEMBER\nስም: {name}\nID: {astu_id}\nክለብ: {club}\nዓመት: {year}\nያጸደቀው: {ADMIN_USERNAME}")
     return f"https://api.qrserver.com/v1/create-qr-code/?size=400x400&ecc=H&margin=20&color=0f172a&bgcolor=38bdf8&data={qr_data}"
 
 init_db()
 
-# ================= MULTI-LANGUAGE PACK =================
+# ================= የቋንቋዎች መዝገብ =================
 TEXTS = {
-    'en': {
-        'home': "🏛 **ASTU Club Portal**\n━━━━━━━━━━━━━━━━━━━━\nWelcome to Adama Science & Technology University's official club registration system.",
-        'reg_btn': "📝 Apply for a Club",
-        'chan_btn': "📢 Official Channel",
-        'sup_btn': "💬 Support",
-        'ask_name': "👤 **Step 1/4:** Enter your **Full Name**:",
-        'ask_id': "🆔 **Step 2/4:** Enter your **ASTU ID** (e.g., `UGR/43400/19`)\n*(Your academic year will be detected automatically)*:",
-        'err_id': "❌ **Invalid Format!** Please enter a valid ASTU ID (e.g., `UGR/43400/19`):",
-        'taken_id': "⚠️ **ID Already Taken!**\nThe ID `{id}` is already registered under the name **{name}**. Please enter your own ASTU ID:",
-        'ask_ph': "📱 **Step 3/4:** Detected Batch: **{year}** ✅\n\nNow share your **Phone Number** using the button below, or type it:",
-        'share_ph': "📲 Share My Phone Number",
-        'err_ph': "❌ Invalid phone number! Use `09...` or `07...`:",
-        'ask_club': "🎯 **Step 4/4:** Select the **ASTU Club** you want to join:",
-        'ask_skill': "⚡ Select your **Primary Skill** (or type a custom message):",
-        'review': "📋 **Review Your Application**\n━━━━━━━━━━━━━━━━━━━━\n👤 **Name:** {name}\n🆔 **ID:** `{astu_id}`\n🎓 **Auto-Detected Year:** {year}\n📱 **Phone:** `{phone}`\n🎯 **Club:** {club}\n⚡ **Skill:** {skill}\n━━━━━━━━━━━━━━━━━━━━\nSubmit application?",
-        'sub_btn': "✅ Submit Application",
-        'edit_btn': "🔄 Start Over",
-        'done': "✅ **Application Submitted!**\n\nYour details have been sent to Admin {admin}. You will receive a **Digital QR Membership Card** once approved!"
-    },
     'am': {
         'home': "🏛 **የASTU ክለቦች መመዝገቢያ**\n━━━━━━━━━━━━━━━━━━━━\nእንኳን ወደ አዳማ ሳይንስና ቴክኖሎጂ ዩኒቨርሲቲ ዘመናዊ የክለቦች መመዝገቢያ በደህና መጡ።",
         'reg_btn': "📝 ለክለብ ተመዝገብ",
@@ -157,16 +139,35 @@ TEXTS = {
         'ask_name': "👤 **ደረጃ 1/4፦** እባክዎ **ሙሉ ስምዎን** ይጻፉ፦",
         'ask_id': "🆔 **ደረጃ 2/4፦** የ**ASTU መታወቂያ ቁጥርዎን** ያስገቡ (ምሳሌ፦ `UGR/43400/19`)\n*(ስንተኛ ዓመት እንደሆኑ ቦቱ ከID-ዎ ላይ ራሱ ያውቀዋል)*፦",
         'err_id': "❌ **የተሳሳተ አጻጻፍ!** እባክዎ በትክክል ይጻፉ (ምሳሌ፦ `UGR/43400/19`)፦",
-        'taken_id': "⚠️ **ይህ መታወቂያ ቁጥር ተይዟል!**\nይህ ID (`{id}`) ቀድሞ በ **{name}** ስም ተመዝግቧል! እባክዎ የራስዎን ID ያስገቡ፦",
+        'taken_id': "⚠️ **ይህ መታወቂያ ቁጥር ተይዟል!**\nይህ ID (`{id}`) ቀድሞ በ **{name}** ስም ተመዝግቧል! እባክዎ የራስዎን ትክክለኛ ID ያስገቡ፦",
         'ask_ph': "📱 **ደረጃ 3/4፦** የትምህርት ዓመት፦ **{year}** ✅\n\nአሁን ከታች ያለውን በተን በመጫን ወይም በመጻፍ **ስልክ ቁጥርዎን** ያስገቡ፦",
         'share_ph': "📲 ስልክ ቁጥሬን ላክ",
         'err_ph': "❌ የተሳሳተ ስልክ ቁጥር! እባክዎ ትክክለኛ ቁጥር ያስገቡ፦",
         'ask_club': "🎯 **ደረጃ 4/4፦** መግባት የሚፈልጉትን **ክለብ** ይምረጡ፦",
         'ask_skill': "⚡ ያለዎትን **ልዩ ችሎታ (Skill)** ከታች ይምረጡ ወይም በእጅዎ ይጻፉ፦",
-        'review': "📋 **መረጃዎን ያረጋግጡ**\n━━━━━━━━━━━━━━━━━━━━\n👤 **ስም፦** {name}\n🆔 **ID፦** `{astu_id}`\n🎓 **ዓመት፦** {year}\n📱 **ስልክ፦** `{phone}`\n🎯 **ክለብ፦** {club}\n⚡ **ችሎታ፦** {skill}\n━━━━━━━━━━━━━━━━━━━━\nመረጃው ትክክል ነው? ይላክ?",
+        'review': "📋 **መረጃዎን ያረጋግጡ**\n━━━━━━━━━━━━━━━━━━━━\n👤 **ስም፦** {name}\n🆔 **መታወቂያ፦** `{astu_id}`\n🎓 **ዓመት፦** {year}\n📱 **ስልክ፦** `{phone}`\n🎯 **ክለብ፦** {club}\n⚡ **ችሎታ፦** {skill}\n━━━━━━━━━━━━━━━━━━━━\nመረጃው ትክክል ነው? ወደ አድሚኑ ይላክ?",
         'sub_btn': "✅ አረጋግጥና ላክ",
         'edit_btn': "🔄 እንደገና ጀምር",
         'done': "✅ **ምዝገባዎ በተሳካ ሁኔታ ተልኳል!**\n\nአድሚኑ ({admin}) ሲያጸድቅልዎ **ባለ QR Code የአባልነት መታወቂያ ካርድ** እዚሁ ይላክልዎታል!"
+    },
+    'en': {
+        'home': "🏛 **ASTU Club Portal**\n━━━━━━━━━━━━━━━━━━━━\nWelcome to Adama Science & Technology University's official club registration system.",
+        'reg_btn': "📝 Apply for a Club",
+        'chan_btn': "📢 Official Channel",
+        'sup_btn': "💬 Support",
+        'ask_name': "👤 **Step 1/4:** Enter your **Full Name**:",
+        'ask_id': "🆔 **Step 2/4:** Enter your **ASTU ID** (e.g., `UGR/43400/19`):",
+        'err_id': "❌ **Invalid Format!** Use `UGR/43400/19`:",
+        'taken_id': "⚠️ **ID Already Taken!**\nThe ID `{id}` belongs to **{name}**. Please enter your own ASTU ID:",
+        'ask_ph': "📱 **Step 3/4:** Detected Year: **{year}** ✅\n\nShare your **Phone Number** using the button below, or type it:",
+        'share_ph': "📲 Share My Phone Number",
+        'err_ph': "❌ Invalid phone number!",
+        'ask_club': "🎯 **Step 4/4:** Select the **ASTU Club** you want to join:",
+        'ask_skill': "⚡ Select your **Primary Skill** (or type it):",
+        'review': "📋 **Review Your Application**\n━━━━━━━━━━━━━━━━━━━━\n👤 **Name:** {name}\n🆔 **ID:** `{astu_id}`\n🎓 **Year:** {year}\n📱 **Phone:** `{phone}`\n🎯 **Club:** {club}\n⚡ **Skill:** {skill}\n━━━━━━━━━━━━━━━━━━━━\nSubmit application?",
+        'sub_btn': "✅ Submit Application",
+        'edit_btn': "🔄 Start Over",
+        'done': "✅ **Application Submitted!**\n\nAdmin {admin} will review it and send your **QR Membership Card** soon!"
     },
     'om': {
         'home': "🏛 **Galmee Kilaboota ASTU**\n━━━━━━━━━━━━━━━━━━━━\nBaga gara sirna galmee kilaboota ASTU nagaan dhuftan.",
@@ -209,59 +210,59 @@ TEXTS = {
 }
 
 CLUBS = [
-    "💻 CSEC ASTU (Competitive Programming)",
-    "🤖 AI & Robotics Club",
-    "🛡️ Cyber Security Club",
-    "🚀 Space Science & Astronomy (ESSS)",
-    "💡 Innovation & Entrepreneurship",
-    "🎨 Media & Digital Arts Club"
+    "💻 CSEC ASTU (ፕሮግራሚንግና ሶፍትዌር)",
+    "🤖 AI & Robotics (ሮቦቲክስና አርቲፊሻል ኢንተליጀንስ)",
+    "🛡️ Cyber Security (ሳይበር ሴኩሪቲ)",
+    "🚀 Space Science (ስፔስ ሳይንስና አስትሮኖሚ)",
+    "💡 Innovation & Startup (ፈጠራና ኢንተርፕረነርሺፕ)",
+    "🎨 Media & Digital Arts (ሚዲያና ዲጂታል አርት)"
 ]
 
 SKILLS = [
     ["🐍 Python / AI", "🌐 Web Development"],
-    ["📱 Mobile Apps", "🎨 UI/UX & Graphics"],
-    ["🛡️ Cyber Security", "🎬 Video Editing"],
-    ["🚀 Enthusiast (Ready to Learn)"]
+    ["📱 Mobile Apps", "🎨 ግራፊክስ ዲዛይን"],
+    ["🛡️ Cyber Security", "🎬 ቪዲዮ ኤዲቲንግ"],
+    ["🚀 ጀማሪ ነኝ (ለመማር ዝግጁ!)"]
 ]
 
-# ================= HANDLERS =================
+# ================= የተማሪዎች መመዝገቢያ ሂደት =================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     existing = get_user(user.id)
 
     if existing:
         kb = [
-            [InlineKeyboardButton("🪪 Download My QR ID Card", callback_data="get_my_qr")],
-            [InlineKeyboardButton("📢 Official Channel", url=CHANNEL_URL),
-             InlineKeyboardButton("💬 Contact Admin", url=f"https://t.me/{ADMIN_USERNAME.replace('@', '')}")]
+            [InlineKeyboardButton("🪪 የQR መታወቂያ ካርዴን አውርድ", callback_data="get_my_qr")],
+            [InlineKeyboardButton("📢 ቻናላችንን ተቀላቀል", url=CHANNEL_URL),
+             InlineKeyboardButton("💬 አድሚኑን አነጋግር", url=f"https://t.me/{ADMIN_USERNAME.replace('@', '')}")]
         ]
         if user.id == ADMIN_ID:
-            kb.insert(0, [InlineKeyboardButton("👑 Open Admin Dashboard", callback_data="open_admin")])
+            kb.insert(0, [InlineKeyboardButton("👑 የአድሚን መቆጣጠሪያ ክፈት", callback_data="open_admin")])
 
         msg = (
             f"👋 **ሰላም {existing['full_name']}! ቀድሞውኑ ተመዝግበዋል!**\n"
             f"━━━━━━━━━━━━━━━━━━━━\n"
-            f"🆔 **ID:** `{existing['astu_id']}`\n"
-            f"🎓 **Year:** {existing['year']}\n"
-            f"🎯 **Club:** {existing['club']}\n"
-            f"📊 **Status:** **{existing['status']}**\n"
+            f"🆔 **መታወቂያ፦** `{existing['astu_id']}`\n"
+            f"🎓 **ዓመት፦** {existing['year']}\n"
+            f"🎯 **ክለብ፦** {existing['club']}\n"
+            f"📊 **ሁኔታ፦** **{existing['status']}**\n"
             f"━━━━━━━━━━━━━━━━━━━━\n"
-            f"ℹ️ *ከታች ያለውን በተን በመጫን የQR መታወቂያ ካርድዎን ማውረድ ይችላሉ።*"
+            f"ℹ️ *ድጋሚ መመዝገብ አይቻልም። ከታች ያለውን በተን በመጫን የQR መታወቂያዎን ማውረድ ይችላሉ።*"
         )
         await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
         return ConversationHandler.END
 
     kb = [
-        [InlineKeyboardButton("🇬🇧 English", callback_data='lang_en'),
-         InlineKeyboardButton("🇪🇹 አማርኛ", callback_data='lang_am')],
+        [InlineKeyboardButton("🇪🇹 አማርኛ", callback_data='lang_am'),
+         InlineKeyboardButton("🇬🇧 English", callback_data='lang_en')],
         [InlineKeyboardButton("🌳 Afaan Oromoo", callback_data='lang_om'),
          InlineKeyboardButton("🌾 ትግርኛ", callback_data='lang_ti')]
     ]
     if user.id == ADMIN_ID:
-        kb.append([InlineKeyboardButton("👑 Open Admin Dashboard", callback_data="open_admin")])
+        kb.append([InlineKeyboardButton("👑 የአድሚን መቆጣጠሪያ ክፈት (Admin)", callback_data="open_admin")])
 
     await update.message.reply_text(
-        "🏛 **ASTU Smart Club Portal**\nSelect your language / እባክዎ ቋንቋ ይምረጡ፦",
+        "🏛 **እንኳን ወደ ASTU ክለቦች መመዝገቢያ በደህና መጡ!**\nእባክዎ የሚፈልጉትን ቋንቋ ይምረጡ / Select Language፦",
         reply_markup=InlineKeyboardMarkup(kb),
         parse_mode="Markdown"
     )
@@ -280,7 +281,7 @@ async def select_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
          InlineKeyboardButton(t['sup_btn'], url=f"https://t.me/{ADMIN_USERNAME.replace('@', '')}")]
     ]
     if update.effective_user.id == ADMIN_ID:
-        kb.append([InlineKeyboardButton("👑 Open Admin Dashboard", callback_data="open_admin")])
+        kb.append([InlineKeyboardButton("👑 የአድሚን መቆጣጠሪያ (Admin)", callback_data="open_admin")])
 
     await query.edit_message_text(t['home'], reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
     return LANG
@@ -310,7 +311,6 @@ async def get_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(TEXTS[lang]['err_id'], parse_mode="Markdown")
         return ASTU_ID
 
-    # Duplicate ID Check with Owner's Name
     owner = check_id_owner(astu_id)
     if owner:
         await update.message.reply_text(
@@ -319,7 +319,6 @@ async def get_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return ASTU_ID
 
-    # Auto-detect academic year from ID!
     detected_year = detect_batch_from_id(astu_id)
     context.user_data['astu_id'] = astu_id
     context.user_data['year'] = detected_year
@@ -392,7 +391,7 @@ async def confirm_registration(update: Update, context: ContextTypes.DEFAULT_TYP
     user = update.effective_user
     d = context.user_data
     d['user_id'] = user.id
-    d['username'] = f"@{user.username}" if user.username else "None"
+    d['username'] = f"@{user.username}" if user.username else "የለውም"
 
     if check_id_owner(d['astu_id']):
         await query.edit_message_text("⚠️ ይህ ID አሁን በሌላ ሰው ተይዟል! /start ብለው እንደገና ይሞክሩ።")
@@ -401,35 +400,35 @@ async def confirm_registration(update: Update, context: ContextTypes.DEFAULT_TYP
     save_member(d)
 
     kb = [
-        [InlineKeyboardButton("🪪 Get My QR ID Card", callback_data="get_my_qr")],
+        [InlineKeyboardButton("🪪 የQR መታወቂያ ካርዴን አውርድ", callback_data="get_my_qr")],
         [InlineKeyboardButton(TEXTS[lang]['chan_btn'], url=CHANNEL_URL),
          InlineKeyboardButton(TEXTS[lang]['sup_btn'], url=f"https://t.me/{ADMIN_USERNAME.replace('@', '')}")]
     ]
     await query.edit_message_text(TEXTS[lang]['done'].format(admin=ADMIN_USERNAME), reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
 
-    # Notify Admin
+    # ለአድሚን (ሰልማን) የሚላክ መልዕክት በአማርኛ
     admin_alert = (
-        f"🔔 **NEW CLUB APPLICATION**\n"
+        f"🔔 **አዲስ የተማሪ ምዝገባ ጥያቄ!**\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
-        f"👤 **Name:** {d['name']}\n"
-        f"🆔 **ID:** `{d['astu_id']}`\n"
-        f"🎓 **Batch:** {d['year']}\n"
-        f"📱 **Phone:** `{d['phone']}`\n"
-        f"🎯 **Club:** {d['club']}\n"
-        f"⚡ **Skill:** {d['skill']}\n"
-        f"🔗 **TG:** {d['username']} (`{user.id}`)"
+        f"👤 **ሙሉ ስም፦** {d['name']}\n"
+        f"🆔 **መታወቂያ፦** `{d['astu_id']}`\n"
+        f"🎓 **ዓመት፦** {d['year']}\n"
+        f"📱 **ስልክ፦** `{d['phone']}`\n"
+        f"🎯 **ክለብ፦** {d['club']}\n"
+        f"⚡ **ችሎታ፦** {d['skill']}\n"
+        f"🔗 **ቴሌግራም፦** {d['username']} (`{user.id}`)"
     )
     adm_kb = [[
-        InlineKeyboardButton("✅ Approve & Send QR ID", callback_data=f"adm_app_{user.id}"),
-        InlineKeyboardButton("🗑️ Reject & Erase", callback_data=f"adm_rej_{user.id}")
+        InlineKeyboardButton("✅ አጽድቅና QR ላክ (Approve)", callback_data=f"adm_app_{user.id}"),
+        InlineKeyboardButton("🗑️ ውድቅ አድርግና ሰርዝ (Reject)", callback_data=f"adm_rej_{user.id}")
     ]]
     await context.bot.send_message(chat_id=ADMIN_ID, text=admin_alert, reply_markup=InlineKeyboardMarkup(adm_kb), parse_mode="Markdown")
     return ConversationHandler.END
 
-# ================= QR ID CARD & INLINE SEARCH =================
+# ================= የQR ካርድ እና የፍለጋ ሲስተም =================
 async def send_qr_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer("🪪 Generating your Digital QR ID...")
+    await query.answer("🪪 የQR መታወቂያ ካርድዎ እየተዘጋጀ ነው...")
     u = get_user(update.effective_user.id)
     if not u:
         await query.message.reply_text("❌ መዝገብ ላይ አልተገኙም! /start ብለው ይመዝገቡ።")
@@ -437,15 +436,15 @@ async def send_qr_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     qr_url = generate_id_card_url(u['full_name'], u['astu_id'], u['club'], u['year'])
     caption = (
-        f"🪪 **ASTU DIGITAL MEMBERSHIP PASS**\n"
+        f"🪪 **የASTU ክለቦች ዲጂታል መታወቂያ**\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
-        f"👤 **Holder:** {u['full_name']}\n"
-        f"🆔 **ID:** `{u['astu_id']}`\n"
-        f"🎓 **Batch:** {u['year']}\n"
-        f"🎯 **Club:** {u['club']}\n"
-        f"📊 **Status:** **{u['status']}**\n"
+        f"👤 **ስም፦** {u['full_name']}\n"
+        f"🆔 **መታወቂያ፦** `{u['astu_id']}`\n"
+        f"🎓 **ዓመት፦** {u['year']}\n"
+        f"🎯 **ክለብ፦** {u['club']}\n"
+        f"📊 **ሁኔታ፦** **{u['status']}**\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
-        f"*Scan QR to verify membership.*"
+        f"*አባልነቱን ለማረጋገጥ QR ኮዱን ስካን ያድርጉ።*"
     )
     await context.bot.send_photo(chat_id=u['user_id'], photo=qr_url, caption=caption, parse_mode="Markdown")
 
@@ -468,34 +467,36 @@ async def inline_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
             title=f"{r['full_name']} ({r['astu_id']})",
             description=f"{r['club']} | {r['status']}",
             input_message_content=InputTextMessageContent(
-                f"👤 **Student:** {r['full_name']}\n🆔 **ID:** `{r['astu_id']}`\n📱 **Phone:** `{r['phone']}`\n🎯 **Club:** {r['club']}\n📊 **Status:** {r['status']}",
+                f"👤 **ተማሪ፦** {r['full_name']}\n🆔 **ID፦** `{r['astu_id']}`\n📱 **ስልክ፦** `{r['phone']}`\n🎯 **ክለብ፦** {r['club']}\n📊 **ሁኔታ፦** {r['status']}",
                 parse_mode="Markdown"
             )
         ))
     await update.inline_query.answer(results, cache_time=1)
 
-# ================= ADMIN DASHBOARD =================
+# ================= የአድሚን መቆጣጠሪያ (ADMIN DASHBOARD በአማርኛ) =================
 async def show_admin_panel(send_func):
     with sqlite3.connect(DB_NAME) as conn:
         total = conn.execute("SELECT COUNT(*) FROM members").fetchone()[0]
-        app_cnt = conn.execute("SELECT COUNT(*) FROM members WHERE status LIKE 'Approved%'").fetchone()[0]
-        pend_cnt = conn.execute("SELECT COUNT(*) FROM members WHERE status LIKE 'Pending%'").fetchone()[0]
+        app_cnt = conn.execute("SELECT COUNT(*) FROM members WHERE status LIKE '%Approved%'").fetchone()[0]
+        pend_cnt = conn.execute("SELECT COUNT(*) FROM members WHERE status LIKE '%Pending%'").fetchone()[0]
         clubs = conn.execute("SELECT club, COUNT(*) FROM members GROUP BY club").fetchall()
 
-    c_stats = "\n".join([f"▫️ {c[0]}: `{c[1]}`" for c in clubs]) or "▫️ No members yet"
+    c_stats = "\n".join([f"▫️ {c[0]}: `{c[1]}`" for c in clubs]) or "▫️ እስካሁን የተመዘገበ የለም"
     txt = (
-        f"👑 **Admin Control Center ({ADMIN_USERNAME})**\n"
+        f"👑 **የአድሚን ሰልማን መቆጣጠሪያ ({ADMIN_USERNAME})**\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
-        f"📊 **Total Active:** `{total}` | ✅ **Approved:** `{app_cnt}` | ⏳ **Pending:** `{pend_cnt}`\n\n"
-        f"📈 **By Club:**\n{c_stats}\n"
+        f"📊 **ጠቅላላ ተመዝጋቢ፦** `{total}`\n"
+        f"✅ **የጸደቀላቸው፦** `{app_cnt}`\n"
+        f"⏳ **በመጠባበቅ ላይ፦** `{pend_cnt}`\n\n"
+        f"📈 **በየክለቡ ያሉ ተማሪዎች ብዛት፦**\n{c_stats}\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
-        f"💡 *Tip: Type `@bot_username UGR/...` in any chat to search students instantly!*"
+        f"💡 *(ውድቅ የተደረጉ ተማሪዎች ከመዝገብ ላይ በራስ-ሰር ተሰርዘዋል)*"
     )
     kb = [
-        [InlineKeyboardButton("📥 Export Excel (CSV)", callback_data="adm_export"),
-         InlineKeyboardButton("📋 Recent 10 Members", callback_data="adm_list")],
-        [InlineKeyboardButton("📢 Broadcast Announcement", callback_data="adm_broadcast")],
-        [InlineKeyboardButton("🔄 Refresh", callback_data="open_admin")]
+        [InlineKeyboardButton("📥 በExcel (CSV) አውርድ", callback_data="adm_export"),
+         InlineKeyboardButton("📋 የመጨረሻዎቹን 10 እይ", callback_data="adm_list")],
+        [InlineKeyboardButton("📢 ለሁሉም ተማሪ መልዕክት ላክ", callback_data="adm_broadcast")],
+        [InlineKeyboardButton("🔄 አድስ (Refresh)", callback_data="open_admin")]
     ]
     await send_func(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
 
@@ -507,7 +508,7 @@ async def admin_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def admin_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if update.effective_user.id != ADMIN_ID:
-        await query.answer("⛔ Admin Only!", show_alert=True)
+        await query.answer("⛔ ይህ ለአድሚኑ ብቻ የተፈቀደ ነው!", show_alert=True)
         return
 
     data = query.data
@@ -520,46 +521,46 @@ async def admin_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         with sqlite3.connect(DB_NAME) as conn:
             rows = conn.execute("SELECT * FROM members").fetchall()
         csv_file = "ASTU_Club_Members.csv"
-        with open(csv_file, 'w', newline='', encoding='utf-8') as f:
+        with open(csv_file, 'w', newline='', encoding='utf-8-sig') as f:
             w = csv.writer(f)
-            w.writerow(["User_ID", "Username", "Full_Name", "ASTU_ID", "Phone", "Year", "Club", "Skill", "Status", "Date"])
+            w.writerow(["User_ID", "Username", "ሙሉ ስም", "ASTU_ID", "ስልክ", "ዓመት", "ክለብ", "ችሎታ", "ሁኔታ", "ቀን"])
             w.writerows(rows)
-        await context.bot.send_document(chat_id=ADMIN_ID, document=open(csv_file, 'rb'), caption="📊 **Clean Member List Exported!**", parse_mode="Markdown")
+        await context.bot.send_document(chat_id=ADMIN_ID, document=open(csv_file, 'rb'), caption="📊 **የተመዘገቡት ተማሪዎች ዝርዝር (Excel/CSV)**", parse_mode="Markdown")
 
     elif data == "adm_list":
         with sqlite3.connect(DB_NAME) as conn:
             rows = conn.execute("SELECT full_name, astu_id, club, status FROM members ORDER BY rowid DESC LIMIT 10").fetchall()
-        txt = "📋 **Last 10 Members:**\n━━━━━━━━━━━━━━━━━━━━\n" + ("\n".join([f"👤 **{r[0]}** (`{r[1]}`)\n   🎯 {r[2]} — {r[3]}" for r in rows]) if rows else "Empty")
-        await query.edit_message_text(txt, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="open_admin")]]), parse_mode="Markdown")
+        txt = "📋 **በቅርብ የተመዘገቡ 10 ተማሪዎች፦**\n━━━━━━━━━━━━━━━━━━━━\n" + ("\n".join([f"👤 **{r[0]}** (`{r[1]}`)\n   🎯 {r[2]} — {r[3]}" for r in rows]) if rows else "መዝገቡ ባዶ ነው።")
+        await query.edit_message_text(txt, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 ወደ ኋላ ተመለስ", callback_data="open_admin")]]), parse_mode="Markdown")
 
     elif data.startswith("adm_app_"):
         uid = int(data.split("_")[2])
         u = get_user(uid)
         if not u:
-            await query.edit_message_text("⚠️ User not found in DB.")
+            await query.edit_message_text("⚠️ ይህ ተማሪ በዳታቤዝ ውስጥ የለም።")
             return
 
         update_db_status(uid, "approve")
         qr_url = generate_id_card_url(u['full_name'], u['astu_id'], u['club'], u['year'])
         caption = (
-            f"🎉 **CONGRATULATIONS {u['full_name'].upper()}!**\n"
+            f"🎉 **እንኳን ደስ አለዎት {u['full_name']}!**\n"
             f"━━━━━━━━━━━━━━━━━━━━\n"
-            f"Your application for **{u['club']}** has been **APPROVED** by Admin {ADMIN_USERNAME}!\n\n"
-            f"🆔 **ID:** `{u['astu_id']}`\n"
-            f"🎓 **Batch:** {u['year']}\n"
-            f"📊 **Status:** `VERIFIED MEMBER ✅`\n"
+            f"ለ **{u['club']}** ያቀረቡት የአባልነት ጥያቄ በአድሚን {ADMIN_USERNAME} **ጸድቋል (Approved)!**\n\n"
+            f"🆔 **መታወቂያ፦** `{u['astu_id']}`\n"
+            f"🎓 **ዓመት፦** {u['year']}\n"
+            f"📊 **ሁኔታ፦** `ህጋዊ አባል ✅`\n"
             f"━━━━━━━━━━━━━━━━━━━━\n"
-            f"Here is your official QR Membership Card!"
+            f"ይህ የእርስዎ ዲጂታል የQR መታወቂያ ካርድ ነው!"
         )
         try:
             await context.bot.send_photo(
                 chat_id=uid, photo=qr_url, caption=caption,
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📢 Join Channel", url=CHANNEL_URL)]]),
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📢 ቻናላችንን ይቀላቀሉ", url=CHANNEL_URL)]]),
                 parse_mode="Markdown"
             )
         except Exception:
             pass
-        await query.edit_message_text(query.message.text + "\n\n✅ **APPROVED & QR CARD SENT**", parse_mode="Markdown")
+        await query.edit_message_text(query.message.text + "\n\n✅ **ጸድቋል! (የQR መታወቂያ ተልኮለታል)**", parse_mode="Markdown")
 
     elif data.startswith("adm_rej_"):
         uid = int(data.split("_")[2])
@@ -567,18 +568,18 @@ async def admin_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             await context.bot.send_message(
                 chat_id=uid,
-                text=f"❌ **Application Declined**\nYour registration was rejected and removed from our database. You may send /start to apply again with valid details, or contact {ADMIN_USERNAME}."
+                text=f"❌ **የምዝገባ መልዕክት**\nለASTU ክለብ ያደረጉት ምዝገባ ውድቅ ተደርጓል (ከመዝገብም ተሰርዟል)። የተሳሳተ መረጃ አስገብተው ከነበረ /start ብለው እንደገና በትክክል መመዝገብ ይችላሉ፣ ወይም {ADMIN_USERNAME} ያነጋግሩ።"
             )
         except Exception:
             pass
-        await query.edit_message_text(query.message.text + "\n\n🗑️ **REJECTED & REMOVED FROM DB**", parse_mode="Markdown")
+        await query.edit_message_text(query.message.text + "\n\n🗑️ **ውድቅ ተደርጓል (ከዳታቤዝ ተሰርዟል)**", parse_mode="Markdown")
 
 async def start_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     if update.effective_user.id != ADMIN_ID:
         return ConversationHandler.END
-    await query.edit_message_text("📢 **Send the message you want to broadcast to all members** (or /cancel):")
+    await query.edit_message_text("📢 **ለተመዘገቡት ተማሪዎች ሁሉ የሚላከውን ማስታወቂያ ይጻፉ** (ለማቋረጥ /cancel ይበሉ)፦")
     return BROADCAST_MSG
 
 async def send_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -587,21 +588,20 @@ async def send_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     sent = 0
     for u in users:
         try:
-            await context.bot.send_message(chat_id=u[0], text=f"📢 **ASTU CLUB ANNOUNCEMENT**\n━━━━━━━━━━━━━━━━━━━━\n{update.message.text}", parse_mode="Markdown")
+            await context.bot.send_message(chat_id=u[0], text=f"📢 **የASTU ክለቦች ማስታወቂያ**\n━━━━━━━━━━━━━━━━━━━━\n{update.message.text}\n━━━━━━━━━━━━━━━━━━━━\n*ከአድሚን {ADMIN_USERNAME}*", parse_mode="Markdown")
             sent += 1
         except Exception:
             pass
-    await update.message.reply_text(f"✅ Broadcast delivered to `{sent}` members!", parse_mode="Markdown")
+    await update.message.reply_text(f"✅ ማስታወቂያው ለ `{sent}` ተማሪዎች በተሳካ ሁኔታ ተልኳል!", parse_mode="Markdown")
     return ConversationHandler.END
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Cancelled. Send /start to begin.", reply_markup=ReplyKeyboardRemove())
+    await update.message.reply_text("ምዝገባው ተቋርጧል። እንደገና ለመጀመር /start ይበሉ።", reply_markup=ReplyKeyboardRemove())
     return ConversationHandler.END
 
 def main():
     app = Application.builder().token(TOKEN).build()
 
-    # Priority Global Handlers
     app.add_handler(CommandHandler('admin', admin_cmd))
     app.add_handler(CallbackQueryHandler(send_qr_card, pattern='^get_my_qr$'))
     app.add_handler(CallbackQueryHandler(admin_callbacks, pattern='^(open_admin|adm_export|adm_list|adm_app_|adm_rej_)'))
