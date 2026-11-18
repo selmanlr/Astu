@@ -1,0 +1,2131 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ASTU — Student Service & Barcode Attendance Portal</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- Google Fonts: Inter & JetBrains Mono -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+    <!-- JsBarcode for 1D Barcodes -->
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+    <!-- QRCode.js for 2D QR Codes -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <!-- HTML5-QRCode for Live Camera Barcode & QR Scanning -->
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        astu: {
+                            navy: '#0A192F',
+                            blue: '#1E3A8A',
+                            gold: '#F59E0B',
+                            amber: '#D97706',
+                            emerald: '#10B981'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #070e1c;
+            color: #f1f5f9;
+            overflow-x: hidden;
+        }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 9999px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+        /* Scanner Laser Animation */
+        @keyframes laserScan {
+            0% { top: 8%; opacity: 0.9; }
+            50% { top: 88%; opacity: 1; }
+            100% { top: 8%; opacity: 0.9; }
+        }
+        .scanner-laser {
+            position: absolute;
+            left: 6%;
+            right: 6%;
+            height: 3px;
+            background: linear-gradient(90deg, transparent, #f59e0b, #10b981, #f59e0b, transparent);
+            box-shadow: 0 0 15px 3px rgba(245, 158, 11, 0.75);
+            animation: laserScan 2.4s ease-in-out infinite;
+            z-index: 20;
+            pointer-events: none;
+        }
+
+        /* Pulse Ring for Voice Announcer */
+        @keyframes pulseRing {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 16px rgba(16, 185, 129, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+        .voice-pulse {
+            animation: pulseRing 1.8s infinite;
+        }
+
+        /* ID Card Holographic Sheen */
+        .id-card-sheen {
+            background: linear-gradient(135deg, rgba(30, 58, 138, 0.92) 0%, rgba(15, 23, 42, 0.98) 65%, rgba(120, 53, 15, 0.5) 100%);
+            position: relative;
+            overflow: hidden;
+        }
+        .id-card-sheen::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(245,158,11,0.12) 0%, transparent 60%);
+            pointer-events: none;
+        }
+
+        /* Print styles for ID Card */
+        @media print {
+            body * { visibility: hidden; }
+            #printable-id-card, #printable-id-card * { visibility: visible; }
+            #printable-id-card {
+                position: fixed;
+                left: 50%;
+                top: 50%;
+                transform: translate(-50%, -50%);
+                width: 420px;
+                box-shadow: none !important;
+                border: 2px solid #000 !important;
+            }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col bg-slate-950 text-slate-100 selection:bg-amber-500 selection:text-slate-950">
+
+    <!-- Top University Announcement & Status Bar -->
+    <div class="bg-gradient-to-r from-amber-600 via-amber-500 to-yellow-500 text-slate-950 px-4 py-1.5 text-xs font-bold flex flex-wrap items-center justify-between gap-2 shadow-md">
+        <div class="flex items-center gap-2">
+            <span class="bg-slate-950 text-amber-400 px-2 py-0.5 rounded-full text-[10px] tracking-wider uppercase font-extrabold">ASTU Official Portal</span>
+            <span>Adama Science and Technology University — Student Service & Automated Barcode Verification System</span>
+        </div>
+        <div class="flex items-center gap-4">
+            <span id="cloud-status-badge" class="flex items-center gap-1.5 bg-slate-950/15 px-2.5 py-0.5 rounded-full">
+                <span class="w-2 h-2 rounded-full bg-emerald-900 animate-ping"></span>
+                <span id="cloud-status-text">Live Database Active</span>
+            </span>
+            <span id="live-clock" class="font-mono font-semibold hidden sm:inline"></span>
+        </div>
+    </div>
+
+    <!-- Main Header & Navigation -->
+    <header class="sticky top-0 z-30 backdrop-blur-xl bg-slate-900/90 border-b border-slate-800/80 shadow-xl">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between py-3.5 gap-3">
+                <!-- Brand Logo -->
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-3.5">
+                        <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-400 via-amber-500 to-blue-700 p-0.5 shadow-lg shadow-amber-500/20 flex items-center justify-center">
+                            <div class="w-full h-full bg-slate-950 rounded-[14px] flex items-center justify-center text-amber-400 font-black text-xl tracking-tighter">
+                                <i class="fa-solid fa-graduation-cap"></i>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <h1 class="text-lg sm:text-xl font-black tracking-tight text-white">ASTU <span class="text-amber-400">SERVICE HUB</span></h1>
+                                <span class="text-[10px] font-mono uppercase bg-blue-500/20 text-blue-300 border border-blue-500/30 px-2 py-0.5 rounded-md font-semibold">v4.0 Enterprise</span>
+                            </div>
+                            <p class="text-xs text-slate-400">Automated Barcode Check-In, Voice Announcer & Owner Control Center</p>
+                        </div>
+                    </div>
+
+                    <!-- Mobile Admin Badge Toggle -->
+                    <button onclick="openAdminModal()" class="md:hidden px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5" id="mobile-admin-btn">
+                        <i class="fa-solid fa-shield-halved"></i>
+                        <span>Admin</span>
+                    </button>
+                </div>
+
+                <!-- Right Controls: Voice Toggle + Owner Admin Control Status -->
+                <div class="flex flex-wrap items-center justify-between md:justify-end gap-2.5">
+                    <!-- Voice Announcer Toggle -->
+                    <button id="voice-toggle-btn" onclick="toggleVoiceAnnouncer()" class="px-3.5 py-2 rounded-xl bg-slate-800/90 hover:bg-slate-700/80 border border-slate-700 text-xs font-semibold flex items-center gap-2 transition-all">
+                        <i id="voice-icon" class="fa-solid fa-volume-high text-emerald-400"></i>
+                        <span>Voice AI: <strong id="voice-status-label" class="text-emerald-400">ON</strong></span>
+                    </button>
+
+                    <!-- Quick Test Voice Button -->
+                    <button onclick="testVoiceAnnouncement()" title="Test Voice Output" class="p-2 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs transition-all">
+                        <i class="fa-solid fa-microphone-lines"></i>
+                    </button>
+
+                    <!-- Admin Lock / Owner Mode Switcher -->
+                    <div id="admin-status-pill" class="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/40 px-3.5 py-1.5 rounded-xl">
+                        <div class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></div>
+                        <div class="text-left">
+                            <div class="text-[10px] uppercase tracking-wider text-emerald-300 font-bold leading-none">Controlled Only By Me</div>
+                            <div id="admin-role-text" class="text-xs font-extrabold text-white">OWNER / ADMIN UNLOCKED</div>
+                        </div>
+                        <button onclick="toggleAdminLock()" id="admin-lock-btn" class="ml-2 px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-amber-400 border border-slate-700 text-xs font-bold transition-all">
+                            <i class="fa-solid fa-lock-open mr-1"></i>Lock
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Navigation Tabs -->
+            <nav class="flex items-center gap-1.5 overflow-x-auto pb-2 pt-1 no-scrollbar border-t border-slate-800/60">
+                <button onclick="switchTab('dashboard')" id="tab-btn-dashboard" class="nav-tab-btn px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all whitespace-nowrap bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/20">
+                    <i class="fa-solid fa-chart-pie"></i>
+                    <span>Live Dashboard</span>
+                </button>
+                <button onclick="switchTab('scanner')" id="tab-btn-scanner" class="nav-tab-btn px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all whitespace-nowrap bg-slate-800/70 text-slate-300 hover:bg-slate-800">
+                    <i class="fa-solid fa-camera-viewfinder text-emerald-400"></i>
+                    <span>Auto Camera Barcode Scanner</span>
+                    <span class="px-1.5 py-0.5 text-[10px] rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">LIVE</span>
+                </button>
+                <button onclick="switchTab('register')" id="tab-btn-register" class="nav-tab-btn px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all whitespace-nowrap bg-slate-800/70 text-slate-300 hover:bg-slate-800">
+                    <i class="fa-solid fa-id-card-clip text-amber-400"></i>
+                    <span>Student Registration & Barcode ID</span>
+                </button>
+                <button onclick="switchTab('admin')" id="tab-btn-admin" class="nav-tab-btn px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all whitespace-nowrap bg-slate-800/70 text-slate-300 hover:bg-slate-800">
+                    <i class="fa-solid fa-user-shield text-blue-400"></i>
+                    <span>Owner Control Panel (Add / Remove)</span>
+                    <span id="nav-count-badge" class="px-2 py-0.5 text-[10px] rounded-full bg-slate-700 text-white font-mono">0</span>
+                </button>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Live Voice Announcement Banner (Appears dynamically on scan/join) -->
+    <div id="live-announcement-banner" class="hidden bg-gradient-to-r from-emerald-950 via-emerald-900 to-slate-900 border-b border-emerald-500/40 px-4 py-3 shadow-2xl transition-all">
+        <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div class="flex items-center gap-3.5">
+                <div class="w-11 h-11 rounded-2xl bg-emerald-500 text-slate-950 flex items-center justify-center text-xl font-black voice-pulse shrink-0">
+                    <i class="fa-solid fa-bullhorn"></i>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-[11px] font-mono uppercase tracking-widest text-emerald-300 font-bold">Automatic Camera Barcode Verification & Voice Broadcast</span>
+                        <span id="banner-timestamp" class="text-[11px] font-mono text-slate-400">Just now</span>
+                    </div>
+                    <p id="banner-message" class="text-base sm:text-lg font-extrabold text-white">
+                        "ASTU Student Abebe Bikila has joined and is participating!"
+                    </p>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <button onclick="replayLastAnnouncement()" class="px-3 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-200 text-xs font-bold flex items-center gap-1.5">
+                    <i class="fa-solid fa-rotate-right"></i> Replay Voice
+                </button>
+                <button onclick="document.getElementById('live-announcement-banner').classList.add('hidden')" class="p-1.5 rounded-lg text-slate-400 hover:text-white">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content Container -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+        <!-- ========================================== -->
+        <!-- TAB 1: LIVE DASHBOARD                      -->
+        <!-- ========================================== -->
+        <section id="tab-dashboard" class="space-y-6">
+            <!-- Hero Banner -->
+            <div class="relative rounded-3xl overflow-hidden border border-slate-800 bg-gradient-to-br from-slate-900 via-blue-950/60 to-slate-900 p-6 sm:p-8 shadow-2xl">
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+                    <div class="lg:col-span-8 space-y-3">
+                        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-bold">
+                            <i class="fa-solid fa-sparkles"></i>
+                            <span>ADAMA SCIENCE AND TECHNOLOGY UNIVERSITY (ASTU)</span>
+                        </div>
+                        <h2 class="text-2xl sm:text-4xl font-black tracking-tight text-white leading-tight">
+                            Smart Student Service Registration, <span class="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-emerald-400">Auto Barcode Camera Scan & Voice Check-In</span>
+                        </h2>
+                        <p class="text-sm text-slate-300 max-w-2xl leading-relaxed">
+                            Students register to receive an instant ASTU Barcode & QR Digital ID Card. When scanned by the camera, the system automatically verifies identity, marks them as <strong class="text-emerald-400">Participating</strong>, and announces their arrival out loud. Full administration is strictly controlled by you.
+                        </p>
+                        <div class="flex flex-wrap items-center gap-3 pt-2">
+                            <button onclick="switchTab('scanner')" class="px-5 py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-sm flex items-center gap-2 shadow-lg shadow-emerald-500/25 transition-all">
+                                <i class="fa-solid fa-camera"></i>
+                                <span>Launch Auto Camera Scanner</span>
+                            </button>
+                            <button onclick="switchTab('register')" class="px-5 py-3 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-sm flex items-center gap-2 shadow-lg shadow-amber-500/20 transition-all">
+                                <i class="fa-solid fa-user-plus"></i>
+                                <span>Register Student & Generate Barcode</span>
+                            </button>
+                            <button onclick="switchTab('admin')" class="px-4 py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-sm border border-slate-700 flex items-center gap-2 transition-all">
+                                <i class="fa-solid fa-sliders"></i>
+                                <span>Owner Control Roster</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Quick Instant Scan Simulator Card on Dashboard -->
+                    <div class="lg:col-span-4 bg-slate-950/80 border border-slate-800/90 rounded-2xl p-5 space-y-3 shadow-xl">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+                                <i class="fa-solid fa-bolt"></i> Instant Barcode Trigger
+                            </span>
+                            <span class="text-[11px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md">Voice Ready</span>
+                        </div>
+                        <p class="text-xs text-slate-400">Test the automatic barcode recognition & voice announcement right now with any registered ASTU student:</p>
+                        <div class="space-y-2">
+                            <select id="dashboard-quick-scan-select" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-white font-medium focus:outline-none focus:border-amber-500">
+                            </select>
+                            <button onclick="triggerDashboardQuickScan()" class="w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs flex items-center justify-center gap-2 shadow-md transition-all">
+                                <i class="fa-solid fa-barcode"></i>
+                                <span>Simulate Camera Scan & Announce Join</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 4 KPI Stats Cards -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <!-- Total Registered -->
+                <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 flex items-center justify-between shadow-lg">
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Total Registered ASTU</p>
+                        <h3 id="stat-total-students" class="text-3xl font-black text-white mt-1">0</h3>
+                        <p class="text-xs text-slate-400 mt-1 flex items-center gap-1">
+                            <i class="fa-solid fa-id-card text-amber-400"></i> Active Barcode IDs issued
+                        </p>
+                    </div>
+                    <div class="w-14 h-14 rounded-2xl bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-blue-400 text-2xl">
+                        <i class="fa-solid fa-users"></i>
+                    </div>
+                </div>
+
+                <!-- Participating Now -->
+                <div class="bg-slate-900/90 border border-emerald-500/30 rounded-2xl p-5 flex items-center justify-between shadow-lg">
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-wider text-emerald-400">Joined & Participating</p>
+                        <h3 id="stat-participating" class="text-3xl font-black text-emerald-400 mt-1">0</h3>
+                        <p id="stat-participation-rate" class="text-xs text-slate-400 mt-1">0% attendance rate</p>
+                    </div>
+                    <div class="w-14 h-14 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 text-2xl">
+                        <i class="fa-solid fa-user-check"></i>
+                    </div>
+                </div>
+
+                <!-- Total Scans Today -->
+                <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 flex items-center justify-between shadow-lg">
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Camera Barcode Scans</p>
+                        <h3 id="stat-total-scans" class="text-3xl font-black text-amber-400 mt-1">0</h3>
+                        <p class="text-xs text-slate-400 mt-1 flex items-center gap-1">
+                            <i class="fa-solid fa-volume-high text-emerald-400"></i> Voice verified check-ins
+                        </p>
+                    </div>
+                    <div class="w-14 h-14 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 text-2xl">
+                        <i class="fa-solid fa-qrcode"></i>
+                    </div>
+                </div>
+
+                <!-- Admin Access Control Status -->
+                <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 flex items-center justify-between shadow-lg">
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">System Control Mode</p>
+                        <h3 id="stat-control-mode" class="text-xl font-black text-white mt-1.5">Owner Controlled</h3>
+                        <p class="text-xs text-amber-400 mt-1 flex items-center gap-1">
+                            <i class="fa-solid fa-key"></i> PIN: <span class="font-mono">1234</span> (Default)
+                        </p>
+                    </div>
+                    <div class="w-14 h-14 rounded-2xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-400 text-2xl">
+                        <i class="fa-solid fa-user-lock"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Live Participating Roster & Real-Time Scan Feed -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                <!-- Left 7 cols: Currently Participating Students -->
+                <div class="lg:col-span-7 bg-slate-900/90 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between space-y-4">
+                    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3.5">
+                        <div>
+                            <h3 class="text-base font-extrabold text-white flex items-center gap-2">
+                                <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
+                                <span>Currently Participating ASTU Students</span>
+                            </h3>
+                            <p class="text-xs text-slate-400">Students who scanned their barcode or were approved by you</p>
+                        </div>
+                        <button onclick="switchTab('admin')" class="text-xs font-bold text-amber-400 hover:underline flex items-center gap-1">
+                            <span>Manage All in Owner Panel</span>
+                            <i class="fa-solid fa-arrow-right"></i>
+                        </button>
+                    </div>
+
+                    <div id="dashboard-participating-list" class="space-y-2.5 max-h-[380px] overflow-y-auto pr-1">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+
+                <!-- Right 5 cols: Live Barcode Scan & Voice Log + School Breakdown -->
+                <div class="lg:col-span-5 space-y-6">
+                    <!-- Live Scan Feed -->
+                    <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 space-y-3.5">
+                        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                            <h3 class="text-base font-extrabold text-white flex items-center gap-2">
+                                <i class="fa-solid fa-bolt-lightning text-amber-400"></i>
+                                <span>Live Barcode Scan & Voice Log</span>
+                            </h3>
+                            <button onclick="clearScanHistory()" class="text-[11px] text-slate-400 hover:text-rose-400 font-semibold">
+                                Clear Log
+                            </button>
+                        </div>
+                        <div id="dashboard-scan-feed" class="space-y-2.5 max-h-[220px] overflow-y-auto pr-1">
+                            <!-- Populated by JS -->
+                        </div>
+                    </div>
+
+                    <!-- ASTU Schools Breakdown -->
+                    <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 space-y-3">
+                        <h3 class="text-sm font-extrabold text-white uppercase tracking-wider flex items-center gap-2">
+                            <i class="fa-solid fa-building-columns text-blue-400"></i>
+                            <span>ASTU School / Department Participation</span>
+                        </h3>
+                        <div id="school-breakdown-bars" class="space-y-2.5 text-xs">
+                            <!-- Populated by JS -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- TAB 2: AUTOMATIC CAMERA BARCODE SCANNER    -->
+        <!-- ========================================== -->
+        <section id="tab-scanner" class="hidden space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                <!-- Left 7 Columns: Live Camera Viewport & Controls -->
+                <div class="lg:col-span-7 bg-slate-900/90 border border-slate-800 rounded-3xl p-5 sm:p-6 space-y-5 shadow-2xl">
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-mono uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold">Auto-Detect 1D Barcode & QR</span>
+                                <span id="camera-state-pill" class="px-2.5 py-0.5 rounded-full text-[10px] font-mono uppercase bg-slate-800 text-slate-400 font-bold">Camera Standby</span>
+                            </div>
+                            <h2 class="text-xl font-black text-white mt-1">ASTU Automatic Camera Barcode Scanner</h2>
+                            <p class="text-xs text-slate-400">Point your webcam or phone camera at any student's ASTU Barcode/QR Card. It automatically joins them and announces their name out loud.</p>
+                        </div>
+
+                        <div class="flex items-center gap-2">
+                            <button id="start-camera-btn" onclick="startLiveCameraScanner()" class="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs flex items-center gap-2 shadow-lg shadow-emerald-500/20 transition-all">
+                                <i class="fa-solid fa-video"></i>
+                                <span>Start Camera Scan</span>
+                            </button>
+                            <button id="stop-camera-btn" onclick="stopLiveCameraScanner()" class="hidden px-4 py-2.5 rounded-xl bg-rose-500 hover:bg-rose-400 text-white font-black text-xs flex items-center gap-2 shadow-lg transition-all">
+                                <i class="fa-solid fa-video-slash"></i>
+                                <span>Stop Camera</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Camera Frame Container -->
+                    <div class="relative rounded-2xl overflow-hidden bg-slate-950 border-2 border-slate-800 min-h-[340px] flex flex-col items-center justify-center">
+                        <!-- Animated Laser Overlay when scanning -->
+                        <div id="scanner-laser-line" class="scanner-laser hidden"></div>
+
+                        <!-- Html5Qrcode Target Div -->
+                        <div id="qr-reader" class="w-full max-w-lg mx-auto"></div>
+
+                        <!-- Placeholder when camera is off -->
+                        <div id="camera-placeholder" class="p-8 text-center space-y-4 max-w-md mx-auto">
+                            <div class="w-20 h-20 rounded-3xl bg-slate-900 border border-slate-700 mx-auto flex items-center justify-center text-amber-400 text-3xl shadow-inner">
+                                <i class="fa-solid fa-barcode"></i>
+                            </div>
+                            <div class="space-y-1">
+                                <h3 class="text-base font-extrabold text-white">Ready for Automatic Barcode & QR Detection</h3>
+                                <p class="text-xs text-slate-400 leading-relaxed">
+                                    Click <strong>"Start Camera Scan"</strong> above to activate your device webcam/camera, or use the <strong>Hardware Barcode Gun / Instant Simulator</strong> below to test student check-in immediately.
+                                </p>
+                            </div>
+                            <div class="flex flex-wrap items-center justify-center gap-2 pt-2">
+                                <button onclick="startLiveCameraScanner()" class="px-4 py-2 rounded-xl bg-emerald-500 text-slate-950 font-extrabold text-xs flex items-center gap-1.5">
+                                    <i class="fa-solid fa-camera"></i> Activate Live Camera
+                                </button>
+                                <button onclick="simulateRandomStudentScan()" class="px-4 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 font-bold text-xs flex items-center gap-1.5">
+                                    <i class="fa-solid fa-wand-magic-sparkles"></i> Demo Auto-Scan Now
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- USB Barcode Scanner Gun / Manual Barcode Input & Instant Camera Simulator -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+                        <!-- Manual / USB Gun Input -->
+                        <div class="bg-slate-950/90 border border-slate-800 rounded-2xl p-4 space-y-2.5">
+                            <label class="text-xs font-bold text-slate-300 flex items-center justify-between">
+                                <span><i class="fa-solid fa-keyboard text-amber-400 mr-1.5"></i>Barcode Gun / Student ID Input</span>
+                                <span class="text-[10px] font-mono text-slate-400">Auto-Enter Supported</span>
+                            </label>
+                            <form onsubmit="handleManualBarcodeSubmit(event)" class="flex gap-2">
+                                <input type="text" id="manual-barcode-input" placeholder="e.g. UGR/12345/16 or ASTU-..." class="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-amber-500">
+                                <button type="submit" class="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs shrink-0">
+                                    Scan In
+                                </button>
+                            </form>
+                        </div>
+
+                        <!-- Instant Registered Student Camera Simulator -->
+                        <div class="bg-slate-950/90 border border-slate-800 rounded-2xl p-4 space-y-2.5">
+                            <label class="text-xs font-bold text-slate-300 flex items-center justify-between">
+                                <span><i class="fa-solid fa-bolt text-emerald-400 mr-1.5"></i>Test Scan Registered Student</span>
+                                <span class="text-[10px] font-mono text-emerald-400">Instant Voice</span>
+                            </label>
+                            <div class="flex gap-2">
+                                <select id="scanner-sim-select" class="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500">
+                                </select>
+                                <button onclick="triggerSimulatedCameraScan()" class="px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs shrink-0 flex items-center gap-1">
+                                    <i class="fa-solid fa-volume-high"></i> Scan
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right 5 Columns: Live Scanned Student Verification Card & Voice Announcer Output -->
+                <div class="lg:col-span-5 space-y-5">
+                    <!-- Active Verification Card -->
+                    <div id="scanned-verification-card" class="bg-slate-900/95 border-2 border-emerald-500/50 rounded-3xl p-6 shadow-2xl space-y-5 relative overflow-hidden">
+                        <div class="flex items-center justify-between">
+                            <span class="px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-extrabold flex items-center gap-1.5">
+                                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                                <span id="verify-status-badge">READY TO SCAN BARCODE</span>
+                            </span>
+                            <span id="verify-scan-time" class="text-xs font-mono text-slate-400">--:--:--</span>
+                        </div>
+
+                        <!-- Student Identity Display -->
+                        <div class="flex items-center gap-4">
+                            <div id="verify-avatar" class="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-400 to-blue-600 flex items-center justify-center text-slate-950 font-black text-2xl shadow-lg shrink-0">
+                                <i class="fa-solid fa-qrcode"></i>
+                            </div>
+                            <div class="min-w-0 flex-1">
+                                <h3 id="verify-student-name" class="text-xl font-black text-white truncate">Awaiting Barcode Scan...</h3>
+                                <p id="verify-student-id" class="text-sm font-mono font-bold text-amber-400">Scan an ASTU ID Card</p>
+                                <p id="verify-student-dept" class="text-xs text-slate-300 truncate mt-0.5">School of Electrical Engineering & Computing</p>
+                            </div>
+                        </div>
+
+                        <!-- Voice Announcement Box -->
+                        <div class="bg-slate-950/90 border border-slate-800 rounded-2xl p-4 space-y-2">
+                            <div class="flex items-center justify-between text-[11px] font-mono uppercase text-emerald-400">
+                                <span><i class="fa-solid fa-waveform-lines mr-1.5"></i>Automatic Voice Announcement</span>
+                                <button onclick="replayLastAnnouncement()" class="text-amber-400 hover:underline font-bold">
+                                    <i class="fa-solid fa-play mr-1"></i>Speak Again
+                                </button>
+                            </div>
+                            <p id="verify-voice-transcript" class="text-sm font-bold text-white italic">
+                                "Scan any student barcode to automatically verify participation and announce their join status."
+                            </p>
+                        </div>
+
+                        <!-- Participation Metadata Grid -->
+                        <div class="grid grid-cols-2 gap-3 text-xs">
+                            <div class="bg-slate-950/60 border border-slate-800/80 rounded-xl p-3">
+                                <span class="text-slate-400 block">Service Category</span>
+                                <strong id="verify-service-type" class="text-white font-bold mt-0.5 block">Main Campus Service</strong>
+                            </div>
+                            <div class="bg-slate-950/60 border border-slate-800/80 rounded-xl p-3">
+                                <span class="text-slate-400 block">Participation Status</span>
+                                <strong id="verify-participation-status" class="text-emerald-400 font-extrabold mt-0.5 block">JOINED & PARTICIPATING</strong>
+                            </div>
+                        </div>
+
+                        <!-- Owner Quick Override Controls directly on Scan Result -->
+                        <div class="pt-2 border-t border-slate-800 flex items-center justify-between gap-2">
+                            <span class="text-[11px] text-slate-400 flex items-center gap-1">
+                                <i class="fa-solid fa-shield-halved text-amber-400"></i> Owner Action:
+                            </span>
+                            <div class="flex items-center gap-2">
+                                <button id="verify-toggle-btn" onclick="toggleLastScannedStudentStatus()" disabled class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-xs font-bold text-white border border-slate-700 transition-all">
+                                    Toggle Participation
+                                </button>
+                                <button id="verify-remove-btn" onclick="removeLastScannedStudent()" disabled class="px-3 py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 disabled:opacity-40 text-xs font-bold text-rose-300 border border-rose-500/30 transition-all">
+                                    Remove Student
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Recent Scans Mini-Queue -->
+                    <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 space-y-3">
+                        <h4 class="text-xs font-extrabold uppercase tracking-wider text-slate-400 flex items-center justify-between">
+                            <span>Recent Automatic Camera Check-Ins</span>
+                            <span id="recent-scans-counter" class="font-mono text-emerald-400">0 scans</span>
+                        </h4>
+                        <div id="scanner-recent-list" class="space-y-2 max-h-[210px] overflow-y-auto pr-1">
+                            <!-- Populated by JS -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- TAB 3: STUDENT REGISTRATION & BARCODE ID   -->
+        <!-- ========================================== -->
+        <section id="tab-register" class="hidden space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                <!-- Left 6 Columns: Student Registration Form -->
+                <div class="lg:col-span-6 bg-slate-900/90 border border-slate-800 rounded-3xl p-6 space-y-5 shadow-2xl">
+                    <div class="border-b border-slate-800 pb-4">
+                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-mono uppercase bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold">Instant Barcode & QR Generator</span>
+                        <h2 class="text-xl font-black text-white mt-1">ASTU Student Service Registration</h2>
+                        <p class="text-xs text-slate-400">Register a student to generate their official ASTU 1D Barcode and 2D QR Digital Service Card for automatic camera check-in.</p>
+                    </div>
+
+                    <form id="student-registration-form" onsubmit="handleStudentRegistration(event)" class="space-y-4">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-bold text-slate-300 mb-1.5">Full Name *</label>
+                                <input type="text" id="reg-name" required placeholder="e.g. Teklehaymanot Bekele" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-slate-300 mb-1.5 flex items-center justify-between">
+                                    <span>ASTU Student ID *</span>
+                                    <button type="button" onclick="generateRandomAstuId()" class="text-[11px] text-amber-400 hover:underline">Auto-Generate ID</button>
+                                </label>
+                                <input type="text" id="reg-id" required placeholder="e.g. UGR/24819/16" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-amber-400 font-mono font-bold focus:outline-none focus:border-amber-500">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-bold text-slate-300 mb-1.5">ASTU School / Faculty *</label>
+                                <select id="reg-school" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-white focus:outline-none focus:border-amber-500">
+                                    <option value="School of Electrical Eng. & Computing (SEEC)">School of Electrical Eng. & Computing (SEEC)</option>
+                                    <option value="School of Mechanical, Chemical & Materials Eng.">School of Mechanical, Chemical & Materials Eng.</option>
+                                    <option value="School of Civil Eng. & Architecture">School of Civil Eng. & Architecture</option>
+                                    <option value="School of Applied Natural Sciences">School of Applied Natural Sciences</option>
+                                    <option value="School of Humanities & Social Sciences">School of Humanities & Social Sciences</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-slate-300 mb-1.5">Academic Year / Batch *</label>
+                                <select id="reg-year" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-white focus:outline-none focus:border-amber-500">
+                                    <option value="1st Year (Freshman)">1st Year (Freshman)</option>
+                                    <option value="2nd Year">2nd Year</option>
+                                    <option value="3rd Year" selected>3rd Year</option>
+                                    <option value="4th Year">4th Year</option>
+                                    <option value="5th Year (Graduating)">5th Year (Graduating)</option>
+                                    <option value="Postgraduate (MSc / PhD)">Postgraduate (MSc / PhD)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-bold text-slate-300 mb-1.5">ASTU Service Program *</label>
+                                <select id="reg-service" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-white focus:outline-none focus:border-amber-500">
+                                    <option value="Cafeteria & Dining Service">Cafeteria & Dining Service</option>
+                                    <option value="Central Library & Digital Lab">Central Library & Digital Lab</option>
+                                    <option value="Dormitory & Campus Housing">Dormitory & Campus Housing</option>
+                                    <option value="Innovation & Robotics Club">Innovation & Robotics Club</option>
+                                    <option value="Student Union & Community Service">Student Union & Community Service</option>
+                                    <option value="University Clinic & Health Service">University Clinic & Health Service</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-slate-300 mb-1.5">Phone / Institutional Email</label>
+                                <input type="text" id="reg-contact" placeholder="+251 911 234 567 / student@astu.edu.et" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500">
+                            </div>
+                        </div>
+
+                        <!-- Option to Immediately Mark as Participating & Voice Announce -->
+                        <div class="bg-slate-950/80 border border-slate-800 rounded-2xl p-3.5 flex items-center justify-between">
+                            <label for="reg-auto-join" class="text-xs text-slate-300 font-medium cursor-pointer">
+                                <strong class="text-emerald-400 block">Auto-Join & Announce Upon Registration</strong>
+                                Mark student as "Participating" immediately and trigger voice welcome
+                            </label>
+                            <input type="checkbox" id="reg-auto-join" checked class="w-5 h-5 accent-emerald-500 rounded cursor-pointer">
+                        </div>
+
+                        <button type="submit" class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-sm flex items-center justify-center gap-2 shadow-xl shadow-amber-500/20 transition-all">
+                            <i class="fa-solid fa-barcode"></i>
+                            <span>Register Student & Generate Barcode ID Card</span>
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Right 6 Columns: Live Digital ASTU Barcode & QR Service ID Card Preview -->
+                <div class="lg:col-span-6 space-y-4">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                            <h3 class="text-base font-extrabold text-white">Official ASTU Digital Barcode ID Card</h3>
+                            <p class="text-xs text-slate-400">Scannable via live webcam, mobile camera, or laser barcode scanner</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button onclick="scanCurrentlyDisplayedCard()" class="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow">
+                                <i class="fa-solid fa-camera"></i>
+                                <span>Test Scan This Card Now</span>
+                            </button>
+                            <button onclick="window.print()" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs border border-slate-700 flex items-center gap-1.5">
+                                <i class="fa-solid fa-print"></i>
+                                <span>Print Card</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Printable ID Card Container -->
+                    <div id="printable-id-card" class="id-card-sheen rounded-3xl border-2 border-amber-500/50 p-6 shadow-2xl space-y-5 text-white">
+                        <!-- Card Header -->
+                        <div class="flex items-center justify-between border-b border-white/15 pb-4">
+                            <div class="flex items-center gap-3">
+                                <div class="w-11 h-11 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center font-black text-xl shadow">
+                                    <i class="fa-solid fa-building-columns"></i>
+                                </div>
+                                <div>
+                                    <h4 class="text-sm font-black tracking-wide uppercase text-amber-400">Adama Science & Technology University</h4>
+                                    <p class="text-[11px] text-slate-300 font-medium">Student Service & Participation Smart Pass</p>
+                                </div>
+                            </div>
+                            <span id="card-status-chip" class="px-2.5 py-1 rounded-full text-[10px] font-mono font-extrabold uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-400/40">
+                                PARTICIPATING
+                            </span>
+                        </div>
+
+                        <!-- Card Body: Student Details + QR Code -->
+                        <div class="grid grid-cols-1 sm:grid-cols-12 gap-4 items-center">
+                            <div class="sm:col-span-8 space-y-2.5">
+                                <div>
+                                    <span class="text-[10px] font-mono uppercase tracking-wider text-slate-400">Student Full Name</span>
+                                    <h3 id="card-student-name" class="text-xl font-black text-white leading-tight">Abebe Bikila</h3>
+                                </div>
+                                <div class="grid grid-cols-2 gap-2">
+                                    <div>
+                                        <span class="text-[10px] font-mono uppercase tracking-wider text-slate-400">ASTU ID Number</span>
+                                        <p id="card-student-id" class="text-sm font-mono font-extrabold text-amber-400">UGR/12001/16</p>
+                                    </div>
+                                    <div>
+                                        <span class="text-[10px] font-mono uppercase tracking-wider text-slate-400">Academic Batch</span>
+                                        <p id="card-student-year" class="text-xs font-bold text-white">3rd Year</p>
+                                    </div>
+                                </div>
+                                <div>
+                                    <span class="text-[10px] font-mono uppercase tracking-wider text-slate-400">School / Department</span>
+                                    <p id="card-student-school" class="text-xs font-semibold text-slate-200">School of Electrical Eng. & Computing (SEEC)</p>
+                                </div>
+                                <div>
+                                    <span class="text-[10px] font-mono uppercase tracking-wider text-slate-400">Authorized Service Category</span>
+                                    <p id="card-student-service" class="text-xs font-bold text-emerald-300">Innovation & Robotics Club</p>
+                                </div>
+                            </div>
+
+                            <!-- 2D QR Code Box -->
+                            <div class="sm:col-span-4 flex flex-col items-center justify-center bg-white p-3 rounded-2xl shadow-inner">
+                                <div id="card-qrcode-container" class="flex items-center justify-center"></div>
+                                <span class="text-[9px] font-mono font-bold text-slate-900 mt-1">ASTU 2D VERIFY</span>
+                            </div>
+                        </div>
+
+                        <!-- 1D Barcode Strip at Bottom -->
+                        <div class="bg-white rounded-2xl p-3 flex flex-col items-center justify-center shadow-inner">
+                            <svg id="card-barcode-svg" class="w-full max-h-16"></svg>
+                        </div>
+
+                        <!-- Card Footer -->
+                        <div class="flex items-center justify-between text-[10px] text-slate-400 font-mono pt-1">
+                            <span>ISSUED BY: ASTU OWNER ADMIN</span>
+                            <span id="card-code-token">CODE: ASTU-UGR1200116</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- TAB 4: OWNER / ADMIN CONTROL PANEL         -->
+        <!-- ========================================== -->
+        <section id="tab-admin" class="hidden space-y-6">
+            <!-- Admin Authority Header Card -->
+            <div class="bg-gradient-to-r from-slate-900 via-blue-950/70 to-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl">
+                <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                    <div class="space-y-1">
+                        <div class="flex items-center gap-2">
+                            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-mono uppercase bg-amber-500 text-slate-950 font-black">Controlled Only By Me</span>
+                            <span id="admin-panel-lock-badge" class="px-2.5 py-0.5 rounded-full text-[10px] font-mono uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold">Owner Session Active</span>
+                        </div>
+                        <h2 class="text-2xl font-black text-white">Owner Student Roster & Participation Control Center</h2>
+                        <p class="text-xs text-slate-300">
+                            Only you (the Owner/Admin) can add students directly, remove students from the system, or toggle who is actively participating.
+                        </p>
+                    </div>
+
+                    <!-- Admin Quick Action Buttons -->
+                    <div class="flex flex-wrap items-center gap-2.5">
+                        <button onclick="openQuickAddModal()" class="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center gap-2 shadow-lg shadow-amber-500/20 transition-all">
+                            <i class="fa-solid fa-user-plus"></i>
+                            <span>+ Owner Add Student</span>
+                        </button>
+                        <button onclick="markAllParticipating(true)" class="px-3.5 py-2.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 font-bold text-xs flex items-center gap-1.5 transition-all">
+                            <i class="fa-solid fa-check-double"></i>
+                            <span>Mark All Participating</span>
+                        </button>
+                        <button onclick="markAllParticipating(false)" class="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-bold text-xs flex items-center gap-1.5 transition-all">
+                            <i class="fa-solid fa-rotate-left"></i>
+                            <span>Reset Attendance</span>
+                        </button>
+                        <button onclick="exportRosterToCSV()" class="px-3.5 py-2.5 rounded-xl bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 border border-blue-500/30 font-bold text-xs flex items-center gap-1.5 transition-all">
+                            <i class="fa-solid fa-file-csv"></i>
+                            <span>Export CSV</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Search & Filter Bar -->
+            <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
+                <div class="sm:col-span-5 relative">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                    <input type="text" id="admin-search-input" oninput="renderAllViews()" placeholder="Search by Student Name, ASTU ID (UGR/...), or Barcode..." class="w-full bg-slate-950 border border-slate-700 rounded-xl pl-9 pr-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-amber-500">
+                </div>
+                <div class="sm:col-span-4">
+                    <select id="admin-school-filter" onchange="renderAllViews()" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-amber-500">
+                        <option value="ALL">All ASTU Schools & Faculties</option>
+                        <option value="School of Electrical Eng. & Computing (SEEC)">School of Electrical Eng. & Computing (SEEC)</option>
+                        <option value="School of Mechanical, Chemical & Materials Eng.">School of Mechanical, Chemical & Materials Eng.</option>
+                        <option value="School of Civil Eng. & Architecture">School of Civil Eng. & Architecture</option>
+                        <option value="School of Applied Natural Sciences">School of Applied Natural Sciences</option>
+                        <option value="School of Humanities & Social Sciences">School of Humanities & Social Sciences</option>
+                    </select>
+                </div>
+                <div class="sm:col-span-3">
+                    <select id="admin-status-filter" onchange="renderAllViews()" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-amber-500">
+                        <option value="ALL">All Statuses (Joined & Pending)</option>
+                        <option value="PARTICIPATING">Participating Only (Scanned In)</option>
+                        <option value="NOT_PARTICIPATING">Not Participating Yet</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Student Roster Table -->
+            <div class="bg-slate-900/90 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="border-b border-slate-800 bg-slate-950/60 text-[11px] font-mono uppercase text-slate-400">
+                                <th class="py-3.5 px-4">Student & ASTU ID</th>
+                                <th class="py-3.5 px-4">School & Year</th>
+                                <th class="py-3.5 px-4">Service Program</th>
+                                <th class="py-3.5 px-4">Participation Status</th>
+                                <th class="py-3.5 px-4">Last Scan / Check-In</th>
+                                <th class="py-3.5 px-4 text-right">Owner Controls (Only Me)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="admin-roster-tbody" class="divide-y divide-slate-800/70 text-xs">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- ========================================== -->
+    <!-- MODAL 1: OWNER / ADMIN PIN LOCK MODAL      -->
+    <!-- ========================================== -->
+    <div id="admin-login-modal" class="fixed inset-0 z-50 hidden bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-md w-full p-6 space-y-5 shadow-2xl">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="w-11 h-11 rounded-2xl bg-amber-500/20 border border-amber-500/40 text-amber-400 flex items-center justify-center text-xl">
+                        <i class="fa-solid fa-user-shield"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-black text-white">Owner Security Verification</h3>
+                        <p class="text-xs text-slate-400">Controlled Only By Me — Enter Owner PIN</p>
+                    </div>
+                </div>
+                <button onclick="closeAdminModal()" class="text-slate-400 hover:text-white">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <form onsubmit="handleAdminPinSubmit(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-300 mb-1.5">Owner Admin PIN (Default: <span class="text-amber-400 font-mono">1234</span>)</label>
+                    <input type="password" id="admin-pin-input" value="1234" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-center text-lg font-mono tracking-widest text-amber-400 focus:outline-none focus:border-amber-500">
+                    <p id="admin-pin-error" class="hidden text-xs text-rose-400 mt-1.5 font-semibold">Incorrect Owner PIN. Try 1234.</p>
+                </div>
+                <div class="flex gap-2.5">
+                    <button type="submit" class="flex-1 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs uppercase tracking-wider">
+                        Unlock Owner Control
+                    </button>
+                    <button type="button" onclick="closeAdminModal()" class="px-4 py-3 rounded-xl bg-slate-800 text-slate-300 font-bold text-xs">
+                        Cancel
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- MODAL 2: OWNER QUICK-ADD STUDENT MODAL     -->
+    <!-- ========================================== -->
+    <div id="quick-add-modal" class="fixed inset-0 z-50 hidden bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-lg w-full p-6 space-y-5 shadow-2xl">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div>
+                    <span class="text-[10px] font-mono uppercase text-amber-400 font-bold">Owner Exclusive Action</span>
+                    <h3 class="text-lg font-black text-white">Add & Approve ASTU Student Directly</h3>
+                </div>
+                <button onclick="closeQuickAddModal()" class="text-slate-400 hover:text-white">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <form onsubmit="handleOwnerQuickAdd(event)" class="space-y-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-300 mb-1">Student Full Name *</label>
+                        <input type="text" id="qa-name" required placeholder="e.g. Mekdes Tadesse" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-300 mb-1">ASTU ID *</label>
+                        <input type="text" id="qa-id" required placeholder="UGR/30912/16" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs font-mono text-amber-400 font-bold">
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-300 mb-1">School / Department</label>
+                        <select id="qa-school" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-white">
+                            <option value="School of Electrical Eng. & Computing (SEEC)">School of Electrical Eng. & Computing (SEEC)</option>
+                            <option value="School of Mechanical, Chemical & Materials Eng.">School of Mechanical, Chemical & Materials Eng.</option>
+                            <option value="School of Civil Eng. & Architecture">School of Civil Eng. & Architecture</option>
+                            <option value="School of Applied Natural Sciences">School of Applied Natural Sciences</option>
+                            <option value="School of Humanities & Social Sciences">School of Humanities & Social Sciences</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-300 mb-1">Service Category</label>
+                        <select id="qa-service" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-white">
+                            <option value="Cafeteria & Dining Service">Cafeteria & Dining Service</option>
+                            <option value="Central Library & Digital Lab">Central Library & Digital Lab</option>
+                            <option value="Dormitory & Campus Housing">Dormitory & Campus Housing</option>
+                            <option value="Innovation & Robotics Club">Innovation & Robotics Club</option>
+                            <option value="Student Union & Community Service">Student Union & Community Service</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-between bg-slate-950 p-3 rounded-xl border border-slate-800">
+                    <span class="text-xs text-slate-300 font-semibold">Immediately Join & Announce via Voice AI</span>
+                    <input type="checkbox" id="qa-participating" checked class="w-4 h-4 accent-emerald-500">
+                </div>
+
+                <div class="flex gap-2.5 pt-2">
+                    <button type="submit" class="flex-1 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs uppercase">
+                        Add Student & Generate Barcode
+                    </button>
+                    <button type="button" onclick="closeQuickAddModal()" class="px-4 py-3 rounded-xl bg-slate-800 text-slate-300 font-bold text-xs">
+                        Cancel
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Custom Toast Notification Container -->
+    <div id="toast-container" class="fixed bottom-5 right-5 z-50 space-y-2 max-w-sm w-full pointer-events-none"></div>
+
+    <!-- Footer -->
+    <footer class="border-t border-slate-900 bg-slate-950/90 py-4 px-4 mt-10">
+        <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 gap-2">
+            <div class="flex items-center gap-2">
+                <i class="fa-solid fa-graduation-cap text-amber-500"></i>
+                <span>Adama Science and Technology University (ASTU) — Automated Barcode & Participation Control System</span>
+            </div>
+            <div>
+                <span>Owner Control Mode • Web Speech Synthesis & Live Camera Scanner</span>
+            </div>
+        </div>
+    </footer>
+
+    <!-- ========================================== -->
+    <!-- APPLICATION LOGIC & CLOUD FIRESTORE SYNC   -->
+    <!-- ========================================== -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // -----------------------------------------------------------------
+        // 1. INITIAL SEED DATA FOR ASTU STUDENTS
+        // -----------------------------------------------------------------
+        const INITIAL_ASTU_STUDENTS = [
+            {
+                id: "astu-101",
+                astuId: "UGR/12001/16",
+                barcodeToken: "ASTU-UGR1200116",
+                name: "Abebe Bikila",
+                school: "School of Electrical Eng. & Computing (SEEC)",
+                year: "3rd Year",
+                service: "Innovation & Robotics Club",
+                contact: "abebe.bikila@astu.edu.et",
+                participating: true,
+                lastScannedAt: "10:15:22 AM",
+                scanCount: 3
+            },
+            {
+                id: "astu-102",
+                astuId: "UGR/14582/16",
+                barcodeToken: "ASTU-UGR1458216",
+                name: "Bethlehem Tadesse",
+                school: "School of Civil Eng. & Architecture",
+                year: "4th Year",
+                service: "Central Library & Digital Lab",
+                contact: "bethlehem.t@astu.edu.et",
+                participating: true,
+                lastScannedAt: "10:42:09 AM",
+                scanCount: 2
+            },
+            {
+                id: "astu-103",
+                astuId: "UGR/19840/15",
+                barcodeToken: "ASTU-UGR1984015",
+                name: "Dawit Mekonnen",
+                school: "School of Mechanical, Chemical & Materials Eng.",
+                year: "5th Year (Graduating)",
+                service: "Cafeteria & Dining Service",
+                contact: "dawit.m@astu.edu.et",
+                participating: false,
+                lastScannedAt: "Not Scanned Yet",
+                scanCount: 0
+            },
+            {
+                id: "astu-104",
+                astuId: "UGR/22109/17",
+                barcodeToken: "ASTU-UGR2210917",
+                name: "Hanna Girma",
+                school: "School of Applied Natural Sciences",
+                year: "2nd Year",
+                service: "Student Union & Community Service",
+                contact: "hanna.girma@astu.edu.et",
+                participating: true,
+                lastScannedAt: "11:05:47 AM",
+                scanCount: 4
+            },
+            {
+                id: "astu-105",
+                astuId: "UGR/25931/17",
+                barcodeToken: "ASTU-UGR2593117",
+                name: "Yohannes Haile",
+                school: "School of Electrical Eng. & Computing (SEEC)",
+                year: "1st Year (Freshman)",
+                service: "Dormitory & Campus Housing",
+                contact: "yohannes.h@astu.edu.et",
+                participating: false,
+                lastScannedAt: "Not Scanned Yet",
+                scanCount: 0
+            }
+        ];
+
+        // -----------------------------------------------------------------
+        // 2. APPLICATION STATE
+        // -----------------------------------------------------------------
+        let students = [...INITIAL_ASTU_STUDENTS];
+        let scanLogs = [
+            {
+                id: "log-1",
+                studentName: "Hanna Girma",
+                astuId: "UGR/22109/17",
+                school: "School of Applied Natural Sciences",
+                time: "11:05:47 AM",
+                message: "ASTU Student Hanna Girma has joined and is participating!"
+            },
+            {
+                id: "log-2",
+                studentName: "Bethlehem Tadesse",
+                astuId: "UGR/14582/16",
+                school: "School of Civil Eng. & Architecture",
+                time: "10:42:09 AM",
+                message: "ASTU Student Bethlehem Tadesse has joined and is participating!"
+            },
+            {
+                id: "log-3",
+                studentName: "Abebe Bikila",
+                astuId: "UGR/12001/16",
+                school: "School of Electrical Eng. & Computing (SEEC)",
+                time: "10:15:22 AM",
+                message: "ASTU Student Abebe Bikila has joined and is participating!"
+            }
+        ];
+
+        let isOwnerUnlocked = true; // Unlocked by default for the owner, can be locked with PIN 1234
+        const OWNER_PIN = "1234";
+        let voiceEnabled = true;
+        let lastAnnouncementText = "ASTU Student Abebe Bikila has joined and is participating!";
+        let lastScannedStudentId = "astu-101";
+        let currentlyDisplayedCardStudent = INITIAL_ASTU_STUDENTS[0];
+        let html5QrCodeScanner = null;
+        let isCameraRunning = false;
+        let lastScanTimestampMs = 0;
+
+        // Firebase variables
+        let db = null;
+        let auth = null;
+        let currentUser = null;
+        let isCloudConnected = false;
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'astu-service-hub';
+
+        // -----------------------------------------------------------------
+        // 3. FIREBASE INITIALIZATION (OPTIONAL REALTIME CLOUD PERSISTENCE)
+        // -----------------------------------------------------------------
+        async function initCloudDatabase() {
+            try {
+                if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+                    const firebaseConfig = JSON.parse(__firebase_config);
+                    const app = initializeApp(firebaseConfig);
+                    auth = getAuth(app);
+                    db = getFirestore(app);
+
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        await signInWithCustomToken(auth, __initial_auth_token);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+
+                    onAuthStateChanged(auth, (user) => {
+                        if (user) {
+                            currentUser = user;
+                            subscribeToStudentsCollection();
+                        }
+                    });
+                }
+            } catch (err) {
+                console.warn("Running in local high-speed memory mode:", err);
+            }
+        }
+
+        function subscribeToStudentsCollection() {
+            if (!db || !currentUser) return;
+            const colRef = collection(db, 'artifacts', appId, 'public', 'data', 'astu_students');
+            onSnapshot(colRef, async (snapshot) => {
+                isCloudConnected = true;
+                const badgeText = document.getElementById('cloud-status-text');
+                if (badgeText) badgeText.textContent = "ASTU Cloud Synced";
+
+                if (snapshot.empty) {
+                    // Seed initial ASTU students to Firestore
+                    for (const st of INITIAL_ASTU_STUDENTS) {
+                        await saveStudentToCloud(st);
+                    }
+                } else {
+                    const loaded = [];
+                    snapshot.forEach(docSnap => loaded.push(docSnap.data()));
+                    students = loaded;
+                    renderAllViews();
+                }
+            }, (error) => {
+                console.warn("Firestore listener fallback:", error);
+            });
+        }
+
+        async function saveStudentToCloud(studentObj) {
+            if (!db || !currentUser) return;
+            try {
+                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'astu_students', studentObj.id);
+                await setDoc(docRef, studentObj);
+            } catch (e) {
+                console.warn("Cloud write skipped:", e);
+            }
+        }
+
+        async function deleteStudentFromCloud(studentDocId) {
+            if (!db || !currentUser) return;
+            try {
+                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'astu_students', studentDocId);
+                await deleteDoc(docRef);
+            } catch (e) {
+                console.warn("Cloud delete skipped:", e);
+            }
+        }
+
+        // -----------------------------------------------------------------
+        // 4. WEB AUDIO CHIME & SPEECH SYNTHESIS ("ITS STUDENT JOIN")
+        // -----------------------------------------------------------------
+        function playVerificationChime(success = true) {
+            try {
+                const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                const ctx = new AudioCtx();
+                const now = ctx.currentTime;
+
+                if (success) {
+                    // Pleasant dual-tone airport/campus verification chime
+                    const freqs = [587.33, 880]; // D5 -> A5
+                    freqs.forEach((f, idx) => {
+                        const osc = ctx.createOscillator();
+                        const gain = ctx.createGain();
+                        osc.type = 'sine';
+                        osc.frequency.setValueAtTime(f, now + idx * 0.13);
+                        gain.gain.setValueAtTime(0.18, now + idx * 0.13);
+                        gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.13 + 0.35);
+                        osc.connect(gain);
+                        gain.connect(ctx.destination);
+                        osc.start(now + idx * 0.13);
+                        osc.stop(now + idx * 0.13 + 0.36);
+                    });
+                } else {
+                    // Error buzz
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(160, now);
+                    gain.gain.setValueAtTime(0.15, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.start(now);
+                    osc.stop(now + 0.32);
+                }
+            } catch (e) {
+                // AudioContext blocked until interaction
+            }
+        }
+
+        function speakAnnouncement(text) {
+            lastAnnouncementText = text;
+            // Show top live announcement banner
+            const banner = document.getElementById('live-announcement-banner');
+            const bannerMsg = document.getElementById('banner-message');
+            const bannerTime = document.getElementById('banner-timestamp');
+            if (banner && bannerMsg) {
+                bannerMsg.textContent = `"${text}"`;
+                bannerTime.textContent = new Date().toLocaleTimeString();
+                banner.classList.remove('hidden');
+            }
+
+            if (!voiceEnabled) return;
+            try {
+                if ('speechSynthesis' in window) {
+                    window.speechSynthesis.cancel();
+                    const utterance = new SpeechSynthesisUtterance(text);
+                    utterance.rate = 1.0;
+                    utterance.pitch = 1.05;
+                    utterance.volume = 1.0;
+                    window.speechSynthesis.speak(utterance);
+                }
+            } catch (e) {
+                console.warn("Speech synthesis warning:", e);
+            }
+        }
+
+        window.toggleVoiceAnnouncer = function() {
+            voiceEnabled = !voiceEnabled;
+            const icon = document.getElementById('voice-icon');
+            const label = document.getElementById('voice-status-label');
+            if (voiceEnabled) {
+                icon.className = "fa-solid fa-volume-high text-emerald-400";
+                label.textContent = "ON";
+                label.className = "text-emerald-400";
+                showToast("Voice AI Announcer Enabled", "emerald");
+            } else {
+                if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+                icon.className = "fa-solid fa-volume-xmark text-slate-400";
+                label.textContent = "MUTED";
+                label.className = "text-slate-400";
+                showToast("Voice AI Announcer Muted", "amber");
+            }
+        };
+
+        window.testVoiceAnnouncement = function() {
+            playVerificationChime(true);
+            speakAnnouncement("ASTU Automated Barcode System is online. Welcome to Adama Science and Technology University.");
+        };
+
+        window.replayLastAnnouncement = function() {
+            playVerificationChime(true);
+            speakAnnouncement(lastAnnouncementText);
+        };
+
+        // -----------------------------------------------------------------
+        // 5. BARCODE & QR DIGITAL ID CARD GENERATOR
+        // -----------------------------------------------------------------
+        function normalizeBarcodeToken(astuId) {
+            return "ASTU-" + astuId.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+        }
+
+        function updateDigitalIdCardPreview(student) {
+            if (!student) return;
+            currentlyDisplayedCardStudent = student;
+
+            document.getElementById('card-student-name').textContent = student.name;
+            document.getElementById('card-student-id').textContent = student.astuId;
+            document.getElementById('card-student-year').textContent = student.year;
+            document.getElementById('card-student-school').textContent = student.school;
+            document.getElementById('card-student-service').textContent = student.service;
+            document.getElementById('card-code-token').textContent = `CODE: ${student.barcodeToken}`;
+
+            const statusChip = document.getElementById('card-status-chip');
+            if (student.participating) {
+                statusChip.textContent = "PARTICIPATING";
+                statusChip.className = "px-2.5 py-1 rounded-full text-[10px] font-mono font-extrabold uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-400/40";
+            } else {
+                statusChip.textContent = "REGISTERED";
+                statusChip.className = "px-2.5 py-1 rounded-full text-[10px] font-mono font-extrabold uppercase bg-amber-500/20 text-amber-300 border border-amber-400/40";
+            }
+
+            // Generate 1D Barcode using JsBarcode
+            try {
+                JsBarcode("#card-barcode-svg", student.astuId, {
+                    format: "CODE128",
+                    lineColor: "#0f172a",
+                    background: "#ffffff",
+                    width: 2,
+                    height: 48,
+                    displayValue: true,
+                    fontSize: 13,
+                    font: "JetBrains Mono",
+                    margin: 4
+                });
+            } catch (e) {
+                console.warn("JsBarcode render error:", e);
+            }
+
+            // Generate 2D QR Code using qrcode.js
+            const qrContainer = document.getElementById('card-qrcode-container');
+            if (qrContainer) {
+                qrContainer.innerHTML = "";
+                try {
+                    new QRCode(qrContainer, {
+                        text: student.astuId,
+                        width: 96,
+                        height: 96,
+                        colorDark: "#0f172a",
+                        colorLight: "#ffffff",
+                        correctLevel: QRCode.CorrectLevel.M
+                    });
+                } catch (e) {
+                    console.warn("QRCode render error:", e);
+                }
+            }
+        }
+
+        window.generateRandomAstuId = function() {
+            const randNum = Math.floor(10000 + Math.random() * 89999);
+            const batch = ["15", "16", "17", "18"][Math.floor(Math.random() * 4)];
+            const input = document.getElementById('reg-id');
+            if (input) input.value = `UGR/${randNum}/${batch}`;
+        };
+
+        // -----------------------------------------------------------------
+        // 6. CORE AUTOMATIC BARCODE SCAN & STUDENT VERIFICATION ENGINE
+        // -----------------------------------------------------------------
+        window.processBarcodeScan = function(rawCode, sourceLabel = "Camera Barcode Scan") {
+            if (!rawCode) return;
+            const cleaned = rawCode.trim().toUpperCase();
+
+            // Prevent duplicate rapid-fire camera scans within 2.2 seconds for the exact same code
+            const nowMs = Date.now();
+            if (nowMs - lastScanTimestampMs < 1800 && window._lastRawCode === cleaned) {
+                return;
+            }
+            lastScanTimestampMs = nowMs;
+            window._lastRawCode = cleaned;
+
+            // Match student by ASTU ID (e.g. UGR/12001/16), normalized token (ASTU-UGR1200116), or internal ID
+            let matchedStudent = students.find(s =>
+                s.astuId.toUpperCase() === cleaned ||
+                s.barcodeToken.toUpperCase() === cleaned ||
+                s.id.toUpperCase() === cleaned ||
+                s.astuId.replace(/[^A-Z0-9]/gi, '').toUpperCase() === cleaned.replace(/^ASTU-/, '').replace(/[^A-Z0-9]/gi, '')
+            );
+
+            const timeNow = new Date().toLocaleTimeString();
+
+            if (!matchedStudent) {
+                // Unknown barcode scanned
+                playVerificationChime(false);
+                const errMsg = `Unregistered Barcode (${cleaned}). Only registered ASTU students can join.`;
+                speakAnnouncement(`Alert! Barcode ${cleaned} is not registered in the ASTU database.`);
+                showToast(errMsg, "rose");
+
+                document.getElementById('verify-status-badge').textContent = "UNREGISTERED BARCODE";
+                document.getElementById('verify-student-name').textContent = "Unknown Student Card";
+                document.getElementById('verify-student-id').textContent = cleaned;
+                document.getElementById('verify-student-dept').textContent = "Not found in ASTU Roster";
+                document.getElementById('verify-voice-transcript').textContent = `"Alert! Barcode ${cleaned} is not registered."`;
+                return;
+            }
+
+            // Mark student as Joined & Participating!
+            matchedStudent.participating = true;
+            matchedStudent.lastScannedAt = timeNow;
+            matchedStudent.scanCount = (matchedStudent.scanCount || 0) + 1;
+            lastScannedStudentId = matchedStudent.id;
+
+            // Persist update
+            saveStudentToCloud(matchedStudent);
+
+            // Construct voice message requested by user ("say its students join and is participating")
+            const voiceText = `ASTU Student ${matchedStudent.name} has joined and is participating!`;
+
+            // Prepend to scan log
+            scanLogs.unshift({
+                id: "log-" + Date.now(),
+                studentName: matchedStudent.name,
+                astuId: matchedStudent.astuId,
+                school: matchedStudent.school,
+                time: timeNow,
+                source: sourceLabel,
+                message: voiceText
+            });
+
+            // Audio + Voice Announcement
+            playVerificationChime(true);
+            speakAnnouncement(voiceText);
+
+            // Update Verification Card on Scanner Tab
+            updateScannerVerificationCard(matchedStudent, timeNow, voiceText);
+
+            // Update ID card preview as well
+            updateDigitalIdCardPreview(matchedStudent);
+
+            // Re-render dashboard & tables
+            renderAllViews();
+            showToast(`Verified: ${matchedStudent.name} (${matchedStudent.astuId}) Joined!`, "emerald");
+        };
+
+        function updateScannerVerificationCard(student, scanTime, voiceTranscript) {
+            document.getElementById('verify-status-badge').textContent = "BARCODE VERIFIED • JOINED";
+            document.getElementById('verify-scan-time').textContent = scanTime;
+            document.getElementById('verify-student-name').textContent = student.name;
+            document.getElementById('verify-student-id').textContent = `${student.astuId} • ${student.year}`;
+            document.getElementById('verify-student-dept').textContent = student.school;
+            document.getElementById('verify-service-type').textContent = student.service;
+            document.getElementById('verify-voice-transcript').textContent = `"${voiceTranscript}"`;
+
+            const initials = student.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+            const avatar = document.getElementById('verify-avatar');
+            avatar.innerHTML = `<span>${initials}</span>`;
+
+            const statusEl = document.getElementById('verify-participation-status');
+            if (student.participating) {
+                statusEl.textContent = "JOINED & PARTICIPATING";
+                statusEl.className = "text-emerald-400 font-extrabold mt-0.5 block";
+            } else {
+                statusEl.textContent = "PAUSED / INACTIVE";
+                statusEl.className = "text-amber-400 font-extrabold mt-0.5 block";
+            }
+
+            document.getElementById('verify-toggle-btn').disabled = false;
+            document.getElementById('verify-remove-btn').disabled = false;
+        }
+
+        // -----------------------------------------------------------------
+        // 7. LIVE CAMERA BARCODE / QR SCANNER (HTML5-QRCODE)
+        // -----------------------------------------------------------------
+        window.startLiveCameraScanner = async function() {
+            const placeholder = document.getElementById('camera-placeholder');
+            const startBtn = document.getElementById('start-camera-btn');
+            const stopBtn = document.getElementById('stop-camera-btn');
+            const laser = document.getElementById('scanner-laser-line');
+            const statePill = document.getElementById('camera-state-pill');
+
+            if (isCameraRunning) return;
+
+            try {
+                if (!html5QrCodeScanner) {
+                    html5QrCodeScanner = new Html5Qrcode("qr-reader");
+                }
+
+                placeholder.classList.add('hidden');
+                laser.classList.remove('hidden');
+                startBtn.classList.add('hidden');
+                stopBtn.classList.remove('hidden');
+                statePill.textContent = "Camera Live • Auto-Scanning";
+                statePill.className = "px-2.5 py-0.5 rounded-full text-[10px] font-mono uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold";
+
+                await html5QrCodeScanner.start(
+                    { facingMode: "environment" },
+                    {
+                        fps: 12,
+                        qrbox: { width: 260, height: 160 }
+                    },
+                    (decodedText) => {
+                        // Automatically triggered when camera sees a 1D Barcode or 2D QR Code!
+                        processBarcodeScan(decodedText, "Live Camera Auto-Scan");
+                    },
+                    (errorMessage) => {
+                        // Frame scan in progress
+                    }
+                );
+                isCameraRunning = true;
+                showToast("Live Camera Barcode Scanner Activated!", "emerald");
+            } catch (err) {
+                console.warn("Camera access unavailable or denied:", err);
+                placeholder.classList.remove('hidden');
+                laser.classList.add('hidden');
+                startBtn.classList.remove('hidden');
+                stopBtn.classList.add('hidden');
+                statePill.textContent = "Simulator Mode Ready";
+                showToast("Camera permission unavailable in preview — use the Instant Simulator below to test barcode scanning!", "amber");
+            }
+        };
+
+        window.stopLiveCameraScanner = async function() {
+            if (!html5QrCodeScanner || !isCameraRunning) return;
+            try {
+                await html5QrCodeScanner.stop();
+                isCameraRunning = false;
+            } catch (e) {
+                console.warn("Camera stop warning:", e);
+            }
+            document.getElementById('camera-placeholder').classList.remove('hidden');
+            document.getElementById('scanner-laser-line').classList.add('hidden');
+            document.getElementById('start-camera-btn').classList.remove('hidden');
+            document.getElementById('stop-camera-btn').classList.add('hidden');
+            const statePill = document.getElementById('camera-state-pill');
+            statePill.textContent = "Camera Standby";
+            statePill.className = "px-2.5 py-0.5 rounded-full text-[10px] font-mono uppercase bg-slate-800 text-slate-400 font-bold";
+            showToast("Camera Scanner Stopped", "slate");
+        };
+
+        // Simulator helpers so user can test camera scanning anytime with 1 click
+        window.triggerSimulatedCameraScan = function() {
+            const sel = document.getElementById('scanner-sim-select');
+            if (sel && sel.value) {
+                processBarcodeScan(sel.value, "Simulated Camera Barcode Scan");
+            }
+        };
+
+        window.triggerDashboardQuickScan = function() {
+            const sel = document.getElementById('dashboard-quick-scan-select');
+            if (sel && sel.value) {
+                processBarcodeScan(sel.value, "Dashboard Quick Barcode Scan");
+            }
+        };
+
+        window.simulateRandomStudentScan = function() {
+            if (students.length === 0) return;
+            const randomStudent = students[Math.floor(Math.random() * students.length)];
+            processBarcodeScan(randomStudent.astuId, "Auto Demo Camera Scan");
+        };
+
+        window.handleManualBarcodeSubmit = function(e) {
+            e.preventDefault();
+            const input = document.getElementById('manual-barcode-input');
+            if (!input || !input.value.trim()) return;
+            processBarcodeScan(input.value.trim(), "Barcode Gun / Manual Input");
+            input.value = "";
+        };
+
+        window.scanCurrentlyDisplayedCard = function() {
+            if (!currentlyDisplayedCardStudent) return;
+            switchTab('scanner');
+            processBarcodeScan(currentlyDisplayedCardStudent.astuId, "Digital ID Card Direct Scan");
+        };
+
+        // -----------------------------------------------------------------
+        // 8. STUDENT REGISTRATION HANDLER
+        // -----------------------------------------------------------------
+        window.handleStudentRegistration = async function(e) {
+            e.preventDefault();
+            const name = document.getElementById('reg-name').value.trim();
+            const astuId = document.getElementById('reg-id').value.trim().toUpperCase();
+            const school = document.getElementById('reg-school').value;
+            const year = document.getElementById('reg-year').value;
+            const service = document.getElementById('reg-service').value;
+            const contact = document.getElementById('reg-contact').value.trim() || "student@astu.edu.et";
+            const autoJoin = document.getElementById('reg-auto-join').checked;
+
+            if (!name || !astuId) return;
+
+            // Check if ASTU ID already exists
+            const existingIndex = students.findIndex(s => s.astuId.toUpperCase() === astuId);
+            const timeNow = new Date().toLocaleTimeString();
+
+            const newStudent = {
+                id: existingIndex >= 0 ? students[existingIndex].id : "astu-" + Date.now(),
+                astuId,
+                barcodeToken: normalizeBarcodeToken(astuId),
+                name,
+                school,
+                year,
+                service,
+                contact,
+                participating: autoJoin,
+                lastScannedAt: autoJoin ? timeNow : "Not Scanned Yet",
+                scanCount: autoJoin ? 1 : 0
+            };
+
+            if (existingIndex >= 0) {
+                students[existingIndex] = newStudent;
+            } else {
+                students.unshift(newStudent);
+            }
+
+            await saveStudentToCloud(newStudent);
+            updateDigitalIdCardPreview(newStudent);
+
+            if (autoJoin) {
+                const msg = `ASTU Student ${newStudent.name} has registered, joined, and is participating!`;
+                scanLogs.unshift({
+                    id: "log-" + Date.now(),
+                    studentName: newStudent.name,
+                    astuId: newStudent.astuId,
+                    school: newStudent.school,
+                    time: timeNow,
+                    message: msg
+                });
+                playVerificationChime(true);
+                speakAnnouncement(msg);
+            } else {
+                showToast(`Registered ${newStudent.name} & Generated Barcode ID Card!`, "amber");
+            }
+
+            renderAllViews();
+            document.getElementById('reg-name').value = "";
+            generateRandomAstuId();
+        };
+
+        // -----------------------------------------------------------------
+        // 9. OWNER-ONLY ("CONTROLLED BY ONLY ME") ADMIN FUNCTIONS
+        // -----------------------------------------------------------------
+        function requireOwnerPermission() {
+            if (!isOwnerUnlocked) {
+                openAdminModal();
+                showToast("Action Restricted: Controlled Only By Owner. Please unlock with PIN (1234).", "rose");
+                return false;
+            }
+            return true;
+        }
+
+        window.toggleAdminLock = function() {
+            if (isOwnerUnlocked) {
+                isOwnerUnlocked = false;
+                updateOwnerHeaderUI();
+                showToast("Owner Controls Locked. Others cannot add or remove students.", "amber");
+            } else {
+                openAdminModal();
+            }
+        };
+
+        window.openAdminModal = function() {
+            document.getElementById('admin-login-modal').classList.remove('hidden');
+            document.getElementById('admin-pin-error').classList.add('hidden');
+            document.getElementById('admin-pin-input').focus();
+        };
+
+        window.closeAdminModal = function() {
+            document.getElementById('admin-login-modal').classList.add('hidden');
+        };
+
+        window.handleAdminPinSubmit = function(e) {
+            e.preventDefault();
+            const pin = document.getElementById('admin-pin-input').value.trim();
+            if (pin === OWNER_PIN) {
+                isOwnerUnlocked = true;
+                closeAdminModal();
+                updateOwnerHeaderUI();
+                renderAllViews();
+                showToast("Owner Control Unlocked! Full add/remove privileges active.", "emerald");
+            } else {
+                document.getElementById('admin-pin-error').classList.remove('hidden');
+                playVerificationChime(false);
+            }
+        };
+
+        function updateOwnerHeaderUI() {
+            const pill = document.getElementById('admin-status-pill');
+            const roleText = document.getElementById('admin-role-text');
+            const lockBtn = document.getElementById('admin-lock-btn');
+            const panelBadge = document.getElementById('admin-panel-lock-badge');
+            const statMode = document.getElementById('stat-control-mode');
+
+            if (isOwnerUnlocked) {
+                pill.className = "flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/40 px-3.5 py-1.5 rounded-xl";
+                roleText.textContent = "OWNER / ADMIN UNLOCKED";
+                roleText.className = "text-xs font-extrabold text-white";
+                lockBtn.innerHTML = `<i class="fa-solid fa-lock-open mr-1"></i>Lock`;
+                if (panelBadge) {
+                    panelBadge.textContent = "Owner Session Active";
+                    panelBadge.className = "px-2.5 py-0.5 rounded-full text-[10px] font-mono uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold";
+                }
+                if (statMode) statMode.textContent = "Owner Unlocked";
+            } else {
+                pill.className = "flex items-center gap-2 bg-rose-500/10 border border-rose-500/40 px-3.5 py-1.5 rounded-xl";
+                roleText.textContent = "LOCKED (VIEW ONLY)";
+                roleText.className = "text-xs font-extrabold text-rose-300";
+                lockBtn.innerHTML = `<i class="fa-solid fa-key mr-1"></i>Unlock`;
+                if (panelBadge) {
+                    panelBadge.textContent = "Locked — View Only";
+                    panelBadge.className = "px-2.5 py-0.5 rounded-full text-[10px] font-mono uppercase bg-rose-500/20 text-rose-300 border border-rose-500/30 font-bold";
+                }
+                if (statMode) statMode.textContent = "PIN Protected";
+            }
+        }
+
+        // Owner Toggle Student Participation
+        window.ownerToggleStudentParticipation = async function(studentId) {
+            if (!requireOwnerPermission()) return;
+            const st = students.find(s => s.id === studentId);
+            if (!st) return;
+
+            st.participating = !st.participating;
+            const timeNow = new Date().toLocaleTimeString();
+
+            if (st.participating) {
+                st.lastScannedAt = timeNow;
+                const msg = `ASTU Student ${st.name} has joined and is participating!`;
+                scanLogs.unshift({
+                    id: "log-" + Date.now(),
+                    studentName: st.name,
+                    astuId: st.astuId,
+                    school: st.school,
+                    time: timeNow,
+                    message: msg
+                });
+                playVerificationChime(true);
+                speakAnnouncement(msg);
+                showToast(`${st.name} marked as Participating`, "emerald");
+            } else {
+                speakAnnouncement(`ASTU Student ${st.name} participation has been paused by the administrator.`);
+                showToast(`${st.name} removed from active participation`, "amber");
+            }
+
+            await saveStudentToCloud(st);
+            renderAllViews();
+        };
+
+        // Owner Remove Student Completely
+        window.ownerRemoveStudent = async function(studentId) {
+            if (!requireOwnerPermission()) return;
+            const index = students.findIndex(s => s.id === studentId);
+            if (index === -1) return;
+
+            const removed = students[index];
+            students.splice(index, 1);
+            await deleteStudentFromCloud(studentId);
+
+            speakAnnouncement(`ASTU Student ${removed.name} has been removed from the system by the owner.`);
+            showToast(`Removed ${removed.name} (${removed.astuId})`, "rose");
+            renderAllViews();
+        };
+
+        // Owner View/Print Any Student's Barcode Card
+        window.ownerViewStudentBarcode = function(studentId) {
+            const st = students.find(s => s.id === studentId);
+            if (!st) return;
+            updateDigitalIdCardPreview(st);
+            switchTab('register');
+            showToast(`Loaded Barcode ID Card for ${st.name}`, "amber");
+        };
+
+        // Quick controls from Scanner Verification Card
+        window.toggleLastScannedStudentStatus = function() {
+            if (lastScannedStudentId) {
+                ownerToggleStudentParticipation(lastScannedStudentId);
+            }
+        };
+
+        window.removeLastScannedStudent = function() {
+            if (lastScannedStudentId) {
+                ownerRemoveStudent(lastScannedStudentId);
+            }
+        };
+
+        // Owner Quick Add Modal
+        window.openQuickAddModal = function() {
+            if (!requireOwnerPermission()) return;
+            const randNum = Math.floor(10000 + Math.random() * 89999);
+            document.getElementById('qa-id').value = `UGR/${randNum}/16`;
+            document.getElementById('quick-add-modal').classList.remove('hidden');
+        };
+
+        window.closeQuickAddModal = function() {
+            document.getElementById('quick-add-modal').classList.add('hidden');
+        };
+
+        window.handleOwnerQuickAdd = async function(e) {
+            e.preventDefault();
+            if (!requireOwnerPermission()) return;
+
+            const name = document.getElementById('qa-name').value.trim();
+            const astuId = document.getElementById('qa-id').value.trim().toUpperCase();
+            const school = document.getElementById('qa-school').value;
+            const service = document.getElementById('qa-service').value;
+            const participating = document.getElementById('qa-participating').checked;
+            const timeNow = new Date().toLocaleTimeString();
+
+            const newSt = {
+                id: "astu-" + Date.now(),
+                astuId,
+                barcodeToken: normalizeBarcodeToken(astuId),
+                name,
+                school,
+                year: "3rd Year",
+                service,
+                contact: "student@astu.edu.et",
+                participating,
+                lastScannedAt: participating ? timeNow : "Not Scanned Yet",
+                scanCount: participating ? 1 : 0
+            };
+
+            students.unshift(newSt);
+            await saveStudentToCloud(newSt);
+            updateDigitalIdCardPreview(newSt);
+
+            if (participating) {
+                const msg = `ASTU Student ${newSt.name} has been added by the owner and is participating!`;
+                scanLogs.unshift({
+                    id: "log-" + Date.now(),
+                    studentName: newSt.name,
+                    astuId: newSt.astuId,
+                    school: newSt.school,
+                    time: timeNow,
+                    message: msg
+                });
+                playVerificationChime(true);
+                speakAnnouncement(msg);
+            }
+
+            closeQuickAddModal();
+            document.getElementById('qa-name').value = "";
+            renderAllViews();
+            showToast(`Added ${newSt.name} (${newSt.astuId})`, "emerald");
+        };
+
+        window.markAllParticipating = async function(state) {
+            if (!requireOwnerPermission()) return;
+            const timeNow = new Date().toLocaleTimeString();
+            for (const st of students) {
+                st.participating = state;
+                if (state) st.lastScannedAt = timeNow;
+                await saveStudentToCloud(st);
+            }
+            if (state) {
+                playVerificationChime(true);
+                speakAnnouncement(`All ${students.length} registered ASTU students are now marked as participating!`);
+                showToast("All students marked as Participating", "emerald");
+            } else {
+                showToast("All participation statuses reset", "amber");
+            }
+            renderAllViews();
+        };
+
+        window.clearScanHistory = function() {
+            if (!requireOwnerPermission()) return;
+            scanLogs = [];
+            renderAllViews();
+            showToast("Scan activity log cleared", "slate");
+        };
+
+        window.exportRosterToCSV = function() {
+            if (students.length === 0) return;
+            const headers = ["Full Name", "ASTU ID", "Barcode Token", "School", "Year", "Service Category", "Participating", "Last Scanned"];
+            const rows = students.map(s => [
+                `"${s.name}"`,
+                `"${s.astuId}"`,
+                `"${s.barcodeToken}"`,
+                `"${s.school}"`,
+                `"${s.year}"`,
+                `"${s.service}"`,
+                s.participating ? "YES - PARTICIPATING" : "NO",
+                `"${s.lastScannedAt}"`
+            ]);
+            const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `ASTU_Student_Participation_Roster_${new Date().toISOString().slice(0,10)}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            showToast("Exported ASTU Participation Roster to CSV!", "emerald");
+        };
+
+        // -----------------------------------------------------------------
+        // 10. UI RENDERING & MULTI-TAB NAVIGATION
+        // -----------------------------------------------------------------
+        window.switchTab = function(tabName) {
+            const tabs = ['dashboard', 'scanner', 'register', 'admin'];
+            tabs.forEach(t => {
+                const sec = document.getElementById(`tab-${t}`);
+                const btn = document.getElementById(`tab-btn-${t}`);
+                if (t === tabName) {
+                    sec.classList.remove('hidden');
+                    btn.className = "nav-tab-btn px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all whitespace-nowrap bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/20";
+                } else {
+                    sec.classList.add('hidden');
+                    btn.className = "nav-tab-btn px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all whitespace-nowrap bg-slate-800/70 text-slate-300 hover:bg-slate-800";
+                }
+            });
+        };
+
+        window.renderAllViews = function() {
+            const total = students.length;
+            const participatingList = students.filter(s => s.participating);
+            const participatingCount = participatingList.length;
+            const rate = total > 0 ? Math.round((participatingCount / total) * 100) : 0;
+
+            // Update KPI counters
+            document.getElementById('stat-total-students').textContent = total;
+            document.getElementById('stat-participating').textContent = participatingCount;
+            document.getElementById('stat-participation-rate').textContent = `${rate}% active participation rate`;
+            document.getElementById('stat-total-scans').textContent = scanLogs.length;
+            document.getElementById('nav-count-badge').textContent = total;
+            document.getElementById('recent-scans-counter').textContent = `${scanLogs.length} scans`;
+
+            // Populate Quick Scan Select Dropdowns (Dashboard & Scanner)
+            const dashSelect = document.getElementById('dashboard-quick-scan-select');
+            const scanSelect = document.getElementById('scanner-sim-select');
+            const optionsHtml = students.map(s =>
+                `<option value="${s.astuId}">${s.name} (${s.astuId}) — ${s.participating ? '✓ Joined' : 'Pending'}</option>`
+            ).join('');
+            if (dashSelect) dashSelect.innerHTML = optionsHtml;
+            if (scanSelect) scanSelect.innerHTML = optionsHtml;
+
+            // Render Dashboard Participating Students List
+            const dashPartContainer = document.getElementById('dashboard-participating-list');
+            if (dashPartContainer) {
+                if (participatingList.length === 0) {
+                    dashPartContainer.innerHTML = `
+                        <div class="text-center py-10 text-slate-500 text-xs">
+                            <i class="fa-solid fa-user-clock text-2xl mb-2 block text-slate-600"></i>
+                            No students are currently marked as participating. Scan a barcode to join!
+                        </div>`;
+                } else {
+                    dashPartContainer.innerHTML = participatingList.map(st => {
+                        const initials = st.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+                        return `
+                        <div class="bg-slate-950/80 border border-slate-800/90 hover:border-emerald-500/40 rounded-2xl p-3.5 flex flex-wrap items-center justify-between gap-3 transition-all">
+                            <div class="flex items-center gap-3 min-w-0">
+                                <div class="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-black text-xs flex items-center justify-center shrink-0">
+                                    ${initials}
+                                </div>
+                                <div class="min-w-0">
+                                    <div class="flex items-center gap-2">
+                                        <h4 class="text-sm font-bold text-white truncate">${st.name}</h4>
+                                        <span class="text-[11px] font-mono text-amber-400 font-semibold">${st.astuId}</span>
+                                    </div>
+                                    <p class="text-[11px] text-slate-400 truncate">${st.school} • <span class="text-slate-300">${st.service}</span></p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="px-2.5 py-1 rounded-full text-[10px] font-mono font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                                    PARTICIPATING (${st.lastScannedAt})
+                                </span>
+                                <button onclick="ownerViewStudentBarcode('${st.id}')" title="View Barcode ID" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-400 text-xs">
+                                    <i class="fa-solid fa-barcode"></i>
+                                </button>
+                                <button onclick="ownerToggleStudentParticipation('${st.id}')" title="Owner Pause Participation" class="p-2 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-300 text-xs">
+                                    <i class="fa-solid fa-user-minus"></i>
+                                </button>
+                            </div>
+                        </div>`;
+                    }).join('');
+                }
+            }
+
+            // Render Dashboard & Scanner Live Scan Logs
+            const feedHtml = scanLogs.length === 0
+                ? `<div class="text-center py-6 text-xs text-slate-500">No barcode scans logged yet.</div>`
+                : scanLogs.slice(0, 12).map(log => `
+                    <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3 flex items-start justify-between gap-2">
+                        <div class="flex items-start gap-2.5">
+                            <div class="w-7 h-7 rounded-lg bg-emerald-500/15 text-emerald-400 flex items-center justify-center text-xs mt-0.5 shrink-0">
+                                <i class="fa-solid fa-volume-high"></i>
+                            </div>
+                            <div>
+                                <p class="text-xs font-bold text-white">${log.studentName} <span class="font-mono text-amber-400 text-[11px]">(${log.astuId})</span></p>
+                                <p class="text-[11px] text-emerald-300 italic">"${log.message}"</p>
+                            </div>
+                        </div>
+                        <span class="text-[10px] font-mono text-slate-400 shrink-0">${log.time}</span>
+                    </div>
+                `).join('');
+
+            const dashFeed = document.getElementById('dashboard-scan-feed');
+            const scannerFeed = document.getElementById('scanner-recent-list');
+            if (dashFeed) dashFeed.innerHTML = feedHtml;
+            if (scannerFeed) scannerFeed.innerHTML = feedHtml;
+
+            // Render School Breakdown Bars
+            const schools = [
+                "School of Electrical Eng. & Computing (SEEC)",
+                "School of Mechanical, Chemical & Materials Eng.",
+                "School of Civil Eng. & Architecture",
+                "School of Applied Natural Sciences",
+                "School of Humanities & Social Sciences"
+            ];
+            const breakdownEl = document.getElementById('school-breakdown-bars');
+            if (breakdownEl) {
+                breakdownEl.innerHTML = schools.map(sch => {
+                    const schTotal = students.filter(s => s.school === sch).length;
+                    const schPart = students.filter(s => s.school === sch && s.participating).length;
+                    const pct = schTotal > 0 ? Math.round((schPart / schTotal) * 100) : 0;
+                    return `
+                        <div class="space-y-1">
+                            <div class="flex justify-between text-[11px]">
+                                <span class="text-slate-300 font-medium truncate pr-2">${sch}</span>
+                                <span class="font-mono text-amber-400 shrink-0">${schPart}/${schTotal} Joined (${pct}%)</span>
+                            </div>
+                            <div class="w-full h-2 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+                                <div class="h-full bg-gradient-to-r from-amber-500 to-emerald-400 rounded-full transition-all duration-500" style="width: ${pct}%"></div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            // Render Admin Roster Table
+            renderAdminTable();
+        };
+
+        function renderAdminTable() {
+            const tbody = document.getElementById('admin-roster-tbody');
+            if (!tbody) return;
+
+            const search = (document.getElementById('admin-search-input')?.value || "").toLowerCase();
+            const schoolFilter = document.getElementById('admin-school-filter')?.value || "ALL";
+            const statusFilter = document.getElementById('admin-status-filter')?.value || "ALL";
+
+            const filtered = students.filter(st => {
+                const matchesSearch =
+                    st.name.toLowerCase().includes(search) ||
+                    st.astuId.toLowerCase().includes(search) ||
+                    st.barcodeToken.toLowerCase().includes(search) ||
+                    st.service.toLowerCase().includes(search);
+                const matchesSchool = schoolFilter === "ALL" || st.school === schoolFilter;
+                const matchesStatus =
+                    statusFilter === "ALL" ||
+                    (statusFilter === "PARTICIPATING" && st.participating) ||
+                    (statusFilter === "NOT_PARTICIPATING" && !st.participating);
+                return matchesSearch && matchesSchool && matchesStatus;
+            });
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="6" class="py-10 text-center text-slate-500 text-xs">
+                            No matching ASTU students found. Use "+ Owner Add Student" to register new students.
+                        </td>
+                    </tr>`;
+                return;
+            }
+
+            tbody.innerHTML = filtered.map(st => `
+                <tr class="hover:bg-slate-800/40 transition-colors">
+                    <td class="py-3.5 px-4">
+                        <div class="font-bold text-white text-sm">${st.name}</div>
+                        <div class="font-mono text-amber-400 text-xs font-semibold">${st.astuId} <span class="text-slate-500 text-[10px]">• ${st.barcodeToken}</span></div>
+                    </td>
+                    <td class="py-3.5 px-4">
+                        <div class="text-slate-200 font-medium">${st.school}</div>
+                        <div class="text-slate-400 text-[11px]">${st.year}</div>
+                    </td>
+                    <td class="py-3.5 px-4">
+                        <span class="px-2.5 py-1 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-300 font-medium">
+                            ${st.service}
+                        </span>
+                    </td>
+                    <td class="py-3.5 px-4">
+                        ${st.participating
+                            ? `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-mono font-extrabold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                                PARTICIPATING
+                               </span>`
+                            : `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-mono font-bold bg-slate-800 text-slate-400 border border-slate-700">
+                                <span class="w-2 h-2 rounded-full bg-slate-500"></span>
+                                NOT JOINED
+                               </span>`
+                        }
+                    </td>
+                    <td class="py-3.5 px-4 font-mono text-slate-300">
+                        <div>${st.lastScannedAt}</div>
+                        <div class="text-[10px] text-slate-500">${st.scanCount || 0} camera scans</div>
+                    </td>
+                    <td class="py-3.5 px-4 text-right">
+                        <div class="inline-flex items-center justify-end gap-1.5">
+                            <button onclick="processBarcodeScan('${st.astuId}', 'Owner Admin Instant Scan')" title="Simulate Barcode Scan & Voice Join" class="px-2.5 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 font-bold text-xs flex items-center gap-1">
+                                <i class="fa-solid fa-volume-high"></i>
+                                <span>Scan & Announce</span>
+                            </button>
+                            <button onclick="ownerViewStudentBarcode('${st.id}')" title="View / Print Barcode ID Card" class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700">
+                                <i class="fa-solid fa-id-card"></i>
+                            </button>
+                            <button onclick="ownerToggleStudentParticipation('${st.id}')" title="Toggle Participating Status" class="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 font-bold text-xs">
+                                ${st.participating ? 'Pause' : 'Approve'}
+                            </button>
+                            <button onclick="ownerRemoveStudent('${st.id}')" title="Remove Student (Owner Only)" class="p-2 rounded-xl bg-rose-500/15 hover:bg-rose-500/30 text-rose-400 border border-rose-500/30">
+                                <i class="fa-solid fa-trash-can"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // -----------------------------------------------------------------
+        // 11. TOAST NOTIFICATION & LIVE CLOCK
+        // -----------------------------------------------------------------
+        function showToast(message, color = "emerald") {
+            const container = document.getElementById('toast-container');
+            if (!container) return;
+
+            const colorClasses = {
+                emerald: "border-emerald-500/50 bg-slate-900/95 text-emerald-300",
+                amber: "border-amber-500/50 bg-slate-900/95 text-amber-300",
+                rose: "border-rose-500/50 bg-slate-900/95 text-rose-300",
+                slate: "border-slate-700 bg-slate-900/95 text-slate-300"
+            };
+
+            const toast = document.createElement('div');
+            toast.className = `pointer-events-auto flex items-center justify-between gap-3 px-4 py-3 rounded-2xl border shadow-2xl text-xs font-bold transition-all duration-300 ${colorClasses[color] || colorClasses.emerald}`;
+            toast.innerHTML = `
+                <div class="flex items-center gap-2.5">
+                    <i class="fa-solid fa-circle-check text-sm"></i>
+                    <span>${message}</span>
+                </div>
+            `;
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                setTimeout(() => toast.remove(), 300);
+            }, 3600);
+        }
+
+        function startLiveClock() {
+            const clockEl = document.getElementById('live-clock');
+            setInterval(() => {
+                if (clockEl) {
+                    clockEl.textContent = "ASTU TIME: " + new Date().toLocaleTimeString();
+                }
+            }, 1000);
+        }
+
+        // -----------------------------------------------------------------
+        // 12. BOOTSTRAP APPLICATION ON LOAD
+        // -----------------------------------------------------------------
+        window.addEventListener('DOMContentLoaded', () => {
+            startLiveClock();
+            generateRandomAstuId();
+            updateDigitalIdCardPreview(students[0]);
+            updateScannerVerificationCard(students[0], students[0].lastScannedAt, "ASTU Student Abebe Bikila has joined and is participating!");
+            renderAllViews();
+            initCloudDatabase();
+        });
+    </script>
+</body>
+                  </html>
